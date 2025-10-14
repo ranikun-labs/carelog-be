@@ -1,0 +1,33 @@
+name: "🚑️hotfix: 운영 긴급 수정"
+description: "프로덕션 이슈에 대한 긴급 패치"
+title: "🚑️hotfix/<간단-설명>"
+labels: ["type: hotfix", "priority: high"]
+assignees: []
+body:
+  - type: textarea
+    id: incident
+    attributes:
+      label: "사건 개요"
+      placeholder: "영향 범위, 시작 시각, 고객 영향, 현재 상태"
+    validations:
+      required: true
+  - type: textarea
+    id: fix
+    attributes:
+      label: "조치 내용"
+      placeholder: "임시/영구 해결 방안, 롤백/재배포 계획, 검증 절차"
+    validations:
+      required: true
+  - type: textarea
+    id: postmortem
+    attributes:
+      label: "사후 분석 항목"
+      placeholder: |
+        - 원인 분석
+        - 재발 방지 액션 아이템
+        - 모니터링/알림 보완
+  - type: input
+    id: branch
+    attributes:
+      label: "브랜치 이름(권장)"
+      placeholder: "hotfix/fix-crash-on-launch"

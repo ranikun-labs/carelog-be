@@ -1,0 +1,27 @@
+name: "✅test: 테스트 코드"
+description: "테스트 코드 추가/수정"
+title: "✅test/<간단-설명>"
+labels: ["type: test"]
+assignees: []
+body:
+  - type: textarea
+    id: scope
+    attributes:
+      label: "테스트 범위"
+      placeholder: "유닛/통합/E2E 및 대상 모듈"
+      description: "무엇을 어떤 관점에서 검증하나요?"
+    validations:
+      required: true
+  - type: textarea
+    id: checklist
+    attributes:
+      label: "체크리스트"
+      placeholder: |
+        - [ ] 성공/실패 케이스 포함
+        - [ ] 경계값 테스트
+        - [ ] CI 통과
+  - type: input
+    id: branch
+    attributes:
+      label: "브랜치 이름(권장)"
+      placeholder: "test/add-user-service-tests"

@@ -1,0 +1,31 @@
+name: "♻️refactor: 리팩토링"
+description: "동작을 바꾸지 않고 구조/가독성을 개선합니다."
+title: "♻️refactor/<간단-설명>"
+labels: ["type: refactor"]
+assignees: []
+body:
+  - type: textarea
+    id: scope
+    attributes:
+      label: "범위"
+      placeholder: "불필요한 import 제거, 컴포넌트 분리 등"
+    validations:
+      required: true
+  - type: textarea
+    id: risk
+    attributes:
+      label: "리스크 / 영향도"
+      placeholder: "테스트 커버리지, 성능 변화, 사이드이펙트 등"
+  - type: textarea
+    id: tasks
+    attributes:
+      label: "할 일 (Tasks)"
+      placeholder: |
+        - [ ] dead code 제거
+        - [ ] 파일 구조 정리
+        - [ ] 유닛 테스트 통과
+  - type: input
+    id: branch
+    attributes:
+      label: "브랜치 이름(권장)"
+      placeholder: "refactor/remove-unused-imports"

@@ -1,0 +1,24 @@
+name: "⚙️chore: 잡무/설정"
+description: "빌드/설정/의존성 등 프로덕션 코드 외 작업"
+title: "⚙️chore/<간단-설명>"
+labels: ["type: chore"]
+assignees: []  # 기본 담당자가 있으면 ["깃허브아이디"] 넣기
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: "작업 내용"
+      placeholder: "eslint 설정 업데이트, 스크립트 추가 등"
+      description: "왜 필요한지 함께 적어주세요."
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: "영향 범위"
+      placeholder: "CI 시간 변화, 로컬 개발자 환경 영향 등"
+  - type: input
+    id: branch
+    attributes:
+      label: "브랜치 이름(권장)"
+      placeholder: "chore/update-eslint-config"

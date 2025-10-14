@@ -1,0 +1,37 @@
+name: "🔖release: 배포 준비"
+description: "릴리스 노트/버전/체크리스트 정리"
+title: "🔖release/<버전>"
+labels: ["type: release"]
+assignees: []
+body:
+  - type: input
+    id: version
+    attributes:
+      label: "버전"
+      placeholder: "v1.2.0"
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: "릴리스 노트(주요 변경)"
+      placeholder: |
+        - Feat: 사용자 프로필 추가
+        - Fix: 로그인 오류 수정
+        - Refactor: 폴더 구조 정리
+    validations:
+      required: true
+  - type: textarea
+    id: checklist
+    attributes:
+      label: "릴리스 체크리스트"
+      placeholder: |
+        - [ ] 버전 태깅
+        - [ ] 마이그레이션 확인
+        - [ ] 롤백 플랜 마련
+        - [ ] 문서/공지 업데이트
+  - type: input
+    id: branch
+    attributes:
+      label: "브랜치 이름(권장)"
+      placeholder: "release/v1.2.0"
