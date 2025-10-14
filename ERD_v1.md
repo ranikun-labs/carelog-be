@@ -3,7 +3,7 @@
 ---
 
 # **1. 사용자 및 관계 (User & Relation Core)**
-
+````
 Table users {
   id uuid [pk]
   email varchar [unique, not null]
@@ -26,9 +26,9 @@ Table relations {
     (therapist_id, client_id) [unique]
   }
 }
-
+````
 # **2. 핵심 기능 (Core Functionality)**
-
+````
 Table relation_entries {
   id uuid [pk]
   relation_id uuid [ref: > relations.id]
@@ -58,9 +58,10 @@ Table reservations {
     (relation_id, start_time) [unique]
   }
 }
+````
 
 # **3. 필수 기반 (Essentials)**
-
+````
 Table tokens {
   id uuid [pk]
   user_id uuid [ref: > users.id]
@@ -77,3 +78,4 @@ Table consent_records {
   status varchar [not null] // 'granted', 'revoked'
   granted_at timestamptz
 }
+````
