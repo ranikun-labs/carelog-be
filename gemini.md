@@ -4,7 +4,34 @@
 
 # **1. 전체 기술 아키텍처 및 공통 전략**
 
-## **2.1. 기술 구조 핵심 요약 (Core Technology Stack)**
+## **2.1. 애플리케이션 아키텍처 (Application Architecture)**
+
+**'도메인 중심의 계층형 아키텍처 (Domain-Centric Layered Architecture)'** 를 채택합니다. 이 아키텍처는 복잡한 비즈니스 로직을 체계적으로 관리하고, 서비스의 확장성과 유지보수성을 극대화하기 위한 최선의 선택입니다.
+
+- **핵심 사상**: 비즈니스 규칙과 로직(도메인)을 애플리케이션의 심장부(Core)에 집중시키고, 외부 기술(UI, DB, 메시징 등)로부터 보호하여 안정적이고 유연한 구조를 만듭니다.
+- **기대 효과**: 거대 서비스 클래스(God Class) 문제를 방지하고, 코드의 응집도를 높이며, 향후 마이크로서비스로의 전환까지 고려한 확장성 있는 설계를 보장합니다.
+
+**주요 계층(Layers):**
+
+1.  **Presentation Layer (Controller)**
+    - **역할:** API 엔드포인트. HTTP 요청/응답 처리, 데이터 검증(DTO), 인증/인가 확인.
+    - **구현:** `@RestController`
+
+2.  **Application Layer (Service)**
+    - **역할:** 사용자 유스케이스(Use Case) 처리. 트랜잭션 관리, 도메인 객체 및 외부 서비스 흐름 조율(Orchestration).
+    - **구현:** `@Service`, `@Transactional`
+
+3.  **Domain Layer (Entity, Domain Service)**
+    - **역할:** 애플리케이션의 핵심. 순수한 비즈니스 로직과 규칙의 집합. 도메인 객체(Entity)가 스스로 상태와 행위를 가집니다.
+    - **구현:** `@Entity`, POJOs (Plain Old Java Objects)
+
+4.  **Infrastructure Layer (Repository, External Clients)**
+    - **역할:** 외부 세계와의 통신. DB 연동, 파일 스토리지, 메시징 큐, 외부 API 호출 등 기술적인 세부사항 담당.
+    - **구현:** Spring Data JPA `@Repository`, Feign/WebClient
+
+---
+
+## **2.2. 기술 구조 핵심 요약 (Core Technology Stack)**
 
 | 영역 (Domain) | 주요 기술/방법 (Technology/Method) |
 | --- | --- |
