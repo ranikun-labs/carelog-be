@@ -1,0 +1,26 @@
+#!/bin/sh
+
+COMMIT_MSG_FILE=$1
+SUBJECT=$(head -n1 "$COMMIT_MSG_FILE")
+
+# Add emoji based on commit type
+case "$SUBJECT" in
+  "feat:"*) NEW_SUBJECT="✨ $SUBJECT" ;;
+  "fix:"*) NEW_SUBJECT="🐛 $SUBJECT" ;;
+  "refactor:"*) NEW_SUBJECT="♻️ $SUBJECT" ;;
+  "chore:"*) NEW_SUBJECT="⚙️ $SUBJECT" ;;
+  "docs:"*) NEW_SUBJECT="📝 $SUBJECT" ;;
+  "test:"*) NEW_SUBJECT="✅ $SUBJECT" ;;
+  "hotfix:"*) NEW_SUBJECT="🚑️ $SUBJECT" ;;
+  "release:"*) NEW_SUBJECT="🔖 $SUBJECT" ;;
+  *) NEW_SUBJECT="$SUBJECT" ;;
+esac
+
+if [ "$NEW_SUBJECT" != "$SUBJECT" ]; then
+  # Write the new subject and the rest of the message to a temp file
+  (echo "$NEW_SUBJECT"; tail -n +2 "$COMMIT_MSG_FILE") > "$COMMIT_MSG_FILE.tmp"
+  # Replace the original commit message file
+  mv "$COMMIT_MSG_FILE.tmp" "$COMMIT_MSG_FILE"
+fi
+
+exit 0
