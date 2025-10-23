@@ -14,15 +14,6 @@ body:
     validations:
       required: true
   - type: textarea
-    id: acceptance
-    attributes:
-      label: "수용 기준 (Acceptance Criteria)"
-      description: "기능이 올바르게 동작한다고 판단할 수 있는 기준을 명시합니다. (선택 사항)"
-      placeholder: |
-        - 예: API 호출 시 예상된 응답(201, 400 등)이 반환된다.
-    validations:
-      required: false
-  - type: textarea
     id: tasks
     attributes:
       label: "할 일 (Tasks)"
