@@ -44,8 +44,8 @@ dependencies {
 	// Jasypt
 	implementation 'com.github.ulisesbocchio:jasypt-spring-boot-starter:3.0.5'
 
-	// Dotenv
-	implementation 'me.paulschwarz:spring-boot-dotenv:4.0.0'
+    // Springdoc (Swagger UI) - compatible with Spring Boot 3.4.x
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.0'
 }
 
 tasks.named('test') {
