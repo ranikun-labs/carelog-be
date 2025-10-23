@@ -1,44 +1,39 @@
 name: "✨feat: 새로운 기능"
 description: "새로운 기능을 제안/추가합니다."
-title: "✨feat/<간단-설명>"
+title: "✨feat: <간단-설명>"
 labels: ["type: feat"]
-assignees: []  # 예: ["ych1513"]
+assignees: []
 body:
-  - type: input
-    id: summary
+  - type: textarea
+    id: description
     attributes:
-      label: "요약"
-      description: "무엇을 왜 추가하나요?"
-      placeholder: "사용자 프로필 기능 추가"
+      label: "기능 설명 (Description)"
+      description: "추가하려는 기능이 무엇인지, 왜 필요한지 설명해주세요."
+      placeholder: |
+        예: 사용자 도메인의 기반이 되는 User 엔티티와 Repository를 생성합니다.
     validations:
       required: true
-  - type: textarea
-    id: details
-    attributes:
-      label: "상세 설명"
-      description: "기능 요구사항과 스펙"
-      placeholder: |
-        - 사용자는 프로필 편집 가능
-        - 필수: 이름, 아바타
   - type: textarea
     id: acceptance
     attributes:
       label: "수용 기준 (Acceptance Criteria)"
+      description: "기능이 올바르게 동작한다고 판단할 수 있는 기준을 명시합니다. (선택 사항)"
       placeholder: |
-        - [ ] 저장 성공/실패 토스트
-        - [ ] 서버 검증 실패 메시지
+        - 예: API 호출 시 예상된 응답(201, 400 등)이 반환된다.
     validations:
-      required: true
+      required: false
   - type: textarea
     id: tasks
     attributes:
       label: "할 일 (Tasks)"
       placeholder: |
-        - [ ] API 스펙
-        - [ ] UI 구현
-        - [ ] 테스트
+        - [ ] Entity, DTO 작성
+        - [ ] Repository 작성
+        - [ ] Service 로직 구현
+        - [ ] Controller 구현
+        - [ ] 테스트 코드 작성
   - type: input
     id: branch
     attributes:
       label: "브랜치 이름(권장)"
-      placeholder: "feat/123-add-user-profile"
+      placeholder: "feat/123-add-user-entity"
