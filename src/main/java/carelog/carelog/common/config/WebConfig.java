@@ -1,5 +1,5 @@
+package carelog.carelog.common.config;
 
-package carelog.carelog.config;
 
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
