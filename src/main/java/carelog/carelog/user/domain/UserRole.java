@@ -1,4 +1,4 @@
-package carelog.carelog.domain.user;
+package carelog.carelog.user.domain;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;

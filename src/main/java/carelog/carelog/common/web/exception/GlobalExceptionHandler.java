@@ -1,5 +1,5 @@
+package carelog.carelog.common.web.exception;
 
-package carelog.carelog.web.exception;
 
 import carelog.carelog.web.dto.response.ErrorResponse;
 import lombok.extern.slf4j.Slf4j;

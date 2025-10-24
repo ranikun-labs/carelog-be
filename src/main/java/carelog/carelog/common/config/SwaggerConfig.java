@@ -1,5 +1,4 @@
-
-package carelog.carelog.config;
+package carelog.carelog.common.config;
 
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;

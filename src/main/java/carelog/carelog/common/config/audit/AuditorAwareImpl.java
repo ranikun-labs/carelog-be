@@ -1,4 +1,4 @@
-package carelog.carelog.config.audit;
+package carelog.carelog.common.config.audit;
 
 import org.springframework.data.domain.AuditorAware;
 import org.springframework.security.core.Authentication;

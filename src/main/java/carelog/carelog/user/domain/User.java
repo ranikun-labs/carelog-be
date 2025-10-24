@@ -1,4 +1,4 @@
-package carelog.carelog.domain.user;
+package carelog.carelog.user.domain;
 
 import carelog.carelog.domain.common.BaseEntity;
 import jakarta.persistence.*;
