@@ -1,4 +1,4 @@
-package carelog.carelog.domain.common;
+package carelog.carelog.common.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.EntityListeners;

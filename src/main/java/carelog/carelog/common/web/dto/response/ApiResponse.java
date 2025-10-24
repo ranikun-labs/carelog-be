@@ -1,5 +1,4 @@
-
-package carelog.carelog.web.dto.response;
+package carelog.carelog.common.web.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Getter;
