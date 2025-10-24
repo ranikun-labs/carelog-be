@@ -2,33 +2,43 @@ package carelog.carelog.common.web.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Getter;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 
 @Getter
-@JsonInclude(JsonInclude.Include.NON_NULL) // Null인 필드는 JSON 변환 시 제외
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class ApiResponse<T> {
 
-    private final boolean success;
-    private final T data;
-    private final String message; // 성공 메시지 또는 추가 정보
+    private final int status;       // HTTP 상태 코드
+    private final String message;   // 응답 메시지
+    private final T data;           // 응답 데이터
 
-    private ApiResponse(boolean success, T data, String message) {
-        this.success = success;
-        this.data = data;
+    private ApiResponse(HttpStatus status, String message, T data) {
+        this.status = status.value();
         this.message = message;
+        this.data = data;
     }
 
-    // 성공 응답 (데이터만 포함)
-    public static <T> ApiResponse<T> of(T data) {
-        return new ApiResponse<>(true, data, null);
+    // 데이터가 없는 성공 응답을 생성
+    public static <T> ApiResponse<T> of(HttpStatus status, String message) {
+        return new ApiResponse<>(status, message, null);
     }
 
-    // 성공 응답 (데이터와 메시지 포함)
-    public static <T> ApiResponse<T> of(T data, String message) {
-        return new ApiResponse<>(true, data, message);
+    // 데이터가 있는 성공 응답을 생성
+    public static <T> ApiResponse<T> of(HttpStatus status, String message, T data) {
+        return new ApiResponse<>(status, message, data);
     }
 
-    // 성공 응답 (데이터 없이 메시지만 포함)
-    public static <T> ApiResponse<T> ok(String message) {
-        return new ApiResponse<>(true, null, message);
+    // [정적 헬퍼 메서드] 성공 (200 OK) 응답 - 데이터 포함
+    public static <T> ResponseEntity<ApiResponse<T>> ok(T data) {
+        return ResponseEntity
+                .ok(new ApiResponse<>(HttpStatus.OK, "요청에 성공하였습니다.", data));
+    }
+
+    // [정적 헬퍼 메서드] 성공 (201 Created) 응답 - 데이터 포함
+    public static <T> ResponseEntity<ApiResponse<T>> created(T data) {
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(new ApiResponse<>(HttpStatus.CREATED, "리소스를 성공적으로 생성하였습니다.", data));
     }
 }
