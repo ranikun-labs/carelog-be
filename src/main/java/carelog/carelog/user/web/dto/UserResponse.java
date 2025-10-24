@@ -25,7 +25,6 @@ public class UserResponse {
                 .role(user.getRole())
                 .phoneEncrypted(user.getPhoneEncrypted())
                 .addressEncrypted(user.getAddressEncrypted())
-                .addressEncrypted(user.getAddressEncrypted())
                 .build();
     }
 }
