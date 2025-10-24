@@ -1,6 +1,6 @@
 package carelog.carelog.user.domain;
 
-import carelog.carelog.domain.common.BaseEntity;
+import carelog.carelog.common.domain.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
