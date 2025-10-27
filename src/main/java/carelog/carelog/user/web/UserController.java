@@ -23,7 +23,7 @@ public class UserController {
         return ApiResponse.created(response);
     }
 
-    @GetMapping("/id/{userId}")
+    @GetMapping("/user-id/{userId}")
     public ResponseEntity<ApiResponse<UserResponse>> findUserByUserId(@PathVariable String userId) {
         UserResponse userResponse = userService.findUserByUserId(userId);
         return ApiResponse.ok(userResponse);
