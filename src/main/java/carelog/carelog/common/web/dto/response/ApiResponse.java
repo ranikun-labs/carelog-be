@@ -41,4 +41,9 @@ public class ApiResponse<T> {
                 .status(HttpStatus.CREATED)
                 .body(new ApiResponse<>(HttpStatus.CREATED, "리소스를 성공적으로 생성하였습니다.", data));
     }
+
+    // [정적 헬퍼 메서드] 성공 (204 No Content) 응답 - 데이터 없음
+    public static ResponseEntity<Void> noContent() {
+        return ResponseEntity.noContent().build();
+    }
 }
