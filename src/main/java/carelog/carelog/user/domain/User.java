@@ -8,7 +8,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "user")
+@Table(name = "users")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class User extends BaseEntity {
@@ -17,6 +17,9 @@ public class User extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id", updatable = false, nullable = false)
     private Long id;
+
+    @Column(name = "user_id", unique = true, nullable = false)
+    private String userId;
 
     @Column(unique = true, nullable = false)
     private String email;
@@ -38,8 +41,9 @@ public class User extends BaseEntity {
 
     @Builder
     public User(
-            String email, String password, String name,
+            String userId, String email, String password, String name,
             UserRole role, String phoneEncrypted, String addressEncrypted) {
+        this.userId = userId;
         this.email = email;
         this.password = password;
         this.name = name;
