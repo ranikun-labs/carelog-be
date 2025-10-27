@@ -1,5 +1,7 @@
 package carelog.carelog.user.app;
 
+import carelog.carelog.common.web.exception.CustomException;
+import carelog.carelog.common.web.exception.ExceptionStatus;
 import carelog.carelog.user.domain.User;
 import carelog.carelog.user.domain.UserRepository;
 import carelog.carelog.user.web.dto.UserCreateRequest;
@@ -21,10 +23,10 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public UserResponse createUser(UserCreateRequest request) {
         if (userRepository.existsByUserId(request.getUserId())) {
-            throw new IllegalArgumentException("이미 존재하는 사용자 ID입니다.");
+            throw new CustomException(ExceptionStatus.DUPLICATE_USER_ID);
         }
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new IllegalArgumentException("이미 존재하는 이메일입니다.");
+            throw new CustomException(ExceptionStatus.DUPLICATE_EMAIL);
         }
 
         User newUser = User.builder()
@@ -44,21 +46,21 @@ public class UserServiceImpl implements UserService {
     @Override
     public UserResponse findUserById(Long id) {
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다.(ID:" + id + ")"));
+                .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
         return UserResponse.from(user);
     }
 
     @Override
     public UserResponse findUserByUserId(String userId) {
         User user = userRepository.findByUserId(userId)
-                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다. (UserId: " + userId + ")"));
+                .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
         return UserResponse.from(user);
     }
 
     @Override
     public UserResponse findUserByEmail(String email) {
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다. (Email: " + email + ")"));
+                .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
         return UserResponse.from(user);
     }
 }
