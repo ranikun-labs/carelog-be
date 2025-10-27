@@ -35,10 +35,6 @@ public abstract class BaseEntity {
     @Column(name = "updated_by")
     private String updatedBy;
 
-    public void softDelete() {
-        this.deletedAt = OffsetDateTime.now();
-    }
-
     public boolean isDeleted() {
         return this.deletedAt != null;
     }
