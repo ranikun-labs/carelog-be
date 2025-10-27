@@ -36,7 +36,7 @@
 
 - 하나의 서비스 클래스가 너무 많은 책임(예: 표준 가입, 임시 가입)을 가져 비대해질 때
 - 특정 기능의 비즈니스 흐름이 여러 외부 시스템 연동(결제, 알림 등)을 포함하여 복잡할 때
-- **흐름:** `Controller` → `UseCase` → `Mapper` → `Repository` 순으로 책임 분리
+- **흐름:** `Controller` → `UseCase`/`Service` → `Mapper` → `Repository` 순으로 책임 분리
 
 #### 권장 성장 경로
 
