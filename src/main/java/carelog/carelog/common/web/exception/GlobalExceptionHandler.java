@@ -1,28 +1,34 @@
 package carelog.carelog.common.web.exception;
 
-import carelog.carelog.common.web.dto.response.ErrorResponse;
+import carelog.carelog.common.web.dto.response.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.context.request.WebRequest;
 
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    /**
+     * 우리가 직접 정의한 CustomException을 처리하는 핸들러
+     */
+    @ExceptionHandler(CustomException.class)
+    public ResponseEntity<ApiResponse<Object>> handleCustomException(CustomException e) {
+        log.warn("CustomException occurred: {}", e.getMessage());
+        ExceptionStatus status = e.getExceptionStatus();
+        ApiResponse<Object> response = ApiResponse.of(status.getHttpStatus(), status.getMessage());
+        return new ResponseEntity<>(response, status.getHttpStatus());
+    }
+
+    /**
+     * 나머지 모든 예외를 처리하는 핸들러
+     */
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleGlobalException(Exception ex, WebRequest request) {
-        log.error("Unhandled exception: {}", ex.getMessage(), ex);
-
-        ErrorResponse errorResponse = new ErrorResponse(
-                HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase(),
-                "An unexpected error occurred.",
-                request.getDescription(false)
-        );
-
-        return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
+    public ResponseEntity<ApiResponse<Object>> handleGlobalException(Exception e) {
+        log.error("Unhandled exception occurred: {}", e.getMessage(), e);
+        ApiResponse<Object> response = ApiResponse.of(HttpStatus.INTERNAL_SERVER_ERROR, "서버에 예상치 못한 오류가 발생했습니다.");
+        return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 }
