@@ -6,6 +6,7 @@ import carelog.carelog.user.domain.User;
 import carelog.carelog.user.domain.UserRepository;
 import carelog.carelog.user.web.dto.UserCreateRequest;
 import carelog.carelog.user.web.dto.UserResponse;
+import carelog.carelog.user.web.dto.UserUpdateRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -62,5 +63,32 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
         return UserResponse.from(user);
+    }
+
+    @Transactional
+    @Override
+    public UserResponse updateUser(Long id, UserUpdateRequest request) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
+
+        if (request.getPassword() != null && !request.getPassword().isBlank()) {
+            user.updatePassword(passwordEncoder.encode(request.getPassword()));
+        }
+        if (request.getPhoneEncrypted() != null) {
+            user.updatePhoneEncrypted(request.getPhoneEncrypted());
+        }
+        if (request.getAddressEncrypted() != null) {
+            user.updateAddressEncrypted(request.getAddressEncrypted());
+        }
+
+        return UserResponse.from(user);
+    }
+
+    @Override
+    @Transactional
+    public void deleteUser(Long id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
+        userRepository.delete(user);
     }
 }
