@@ -37,6 +37,9 @@ public class User extends BaseEntity {
     @Column(nullable = false)
     private UserRole role;
 
+    @Enumerated(EnumType.STRING)
+    private ManagerType managerType;
+
     @Column(name = "phone_encrypted")
     private String phoneEncrypted;
 
@@ -46,12 +49,13 @@ public class User extends BaseEntity {
     @Builder
     public User(
             String userId, String email, String password, String name,
-            UserRole role, String phoneEncrypted, String addressEncrypted) {
+            UserRole role, ManagerType managerType, String phoneEncrypted, String addressEncrypted) {
         this.userId = userId;
         this.email = email;
         this.password = password;
         this.name = name;
         this.role = role;
+        this.managerType = managerType;
         this.phoneEncrypted = phoneEncrypted;
         this.addressEncrypted = addressEncrypted;
     }
