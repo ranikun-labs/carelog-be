@@ -6,8 +6,8 @@ import lombok.RequiredArgsConstructor;
 @Getter
 @RequiredArgsConstructor
 public enum UserRole {
-    THERAPIST("THERAPIST", "치료사"),
-    CLIENT("CLIENT", "고객");
+    MANAGER("MANAGER", "관리자"),
+    CUSTOMER("CUSTOMER", "고객");
 
     private final String key;
     private final String title;
