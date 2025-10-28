@@ -1,14 +1,12 @@
 package carelog.carelog.relation.domain;
 
-import carelog.carelog.common.domain.BaseEntity;
-import carelog.carelog.user.domain.User;
+import carelog.carelog.common.domain.*;
+import carelog.carelog.common.web.exception.*;
+import carelog.carelog.user.domain.*;
 import jakarta.persistence.*;
-import lombok.AccessLevel;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import org.hibernate.annotations.SQLDelete;
-import org.hibernate.annotations.SQLRestriction;
+import jakarta.persistence.Table;
+import lombok.*;
+import org.hibernate.annotations.*;
 
 @Entity
 @SQLDelete(sql = "UPDATE relations SET deleted_at = NOW() WHERE id = ?")
@@ -34,11 +32,21 @@ public class Relation extends BaseEntity {
     @Enumerated(EnumType.STRING)
     private RelationStatus status;
 
-    @Builder
-    public Relation(User manager, User customer, RelationStatus status) {
+    private Relation(User manager, User customer, RelationStatus status) {
         this.manager = manager;
         this.customer = customer;
         this.status = status;
+    }
+
+    public static Relation create(User manager, User customer) {
+        if (manager.getRole() != UserRole.MANAGER) {
+            throw new CustomException(ExceptionStatus.INVALID_USER_ROLE);
+        }
+        if (customer.getRole() != UserRole.CUSTOMER) {
+            throw new CustomException(ExceptionStatus.INVALID_USER_ROLE);
+        }
+
+        return new Relation(manager, customer, RelationStatus.ACTIVE);
     }
 
     public void updateStatus(RelationStatus status) {
