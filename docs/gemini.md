@@ -186,7 +186,7 @@ V2에서 Spring Cloud Gateway를 도입할 경우, 이는 시스템의 외부 �
     - BCrypt 해싱을 사용한 안전한 비밀번호 저장.
     - Jasypt 등을 활용하여 `phone_encrypted`, `address_encrypted` 등 민감 정보 필드 암호화.
     - JWT 기반의 인증 토큰(Access/Refresh) 발급 및 검증을 통한 세션 관리.
-    - 가입 시 'THERAPIST', 'CLIENT' 등 기본적인 역할 지정.
+    - 가입 시 'MANAGER', 'CUSTOMER' 등 기본적인 역할 지정.
     - 개인정보 처리 등 필수적인 사용자 동의 여부 기록.
 - **관련 ERD 테이블:** `users`, `tokens`, `consent_records`
 
@@ -194,7 +194,7 @@ V2에서 Spring Cloud Gateway를 도입할 경우, 이는 시스템의 외부 �
 
 - **기능 설명:** 치료사와 고객 간의 공식적인 관계를 시스템에 설정하여 데이터 접근의 기반을 마련합니다.
 - **주요 요구사항:**
-    - 특정 치료사와 특정 고객을 1:1로 연결.
+    - 특정 매니저와 특정 고객을 1:1로 연결.
     - 연결된 관계의 상태('활성', '종료' 등)를 관리.
 - **관련 ERD 테이블:** `relations`, `users`
 
