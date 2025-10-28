@@ -34,7 +34,7 @@ Table customer_profiles {
 
 // [변경] 'relations' 테이블의 컬럼명을 역할에 맞춰 명확하게 변경합니다.
 Table relations {
-  id uuid [pk]
+  id int [pk]
   manager_id uuid [ref: > users.id] // [변경] therapist_id -> manager_id
   customer_id uuid [ref: > users.id] // [변경] client_id -> customer_id
   status varchar // active, ended
