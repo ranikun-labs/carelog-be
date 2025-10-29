@@ -9,7 +9,7 @@ import java.util.Optional;
 
 public interface RelationService {
 
-    Relation createRelation(User manger, User customer);
+    Relation createRelation(User manager, User customer);
 
     Optional<Relation> findRelationById(Long relationId);
 
