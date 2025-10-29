@@ -11,7 +11,7 @@ import java.util.*;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-public class RelationServiceImple implements RelationService {
+public class RelationServiceImpl implements RelationService {
 
     private final RelationRepository relationRepository;
     private final UserRepository userRepository;
