@@ -11,7 +11,7 @@ public interface RelationRepository extends JpaRepository<Relation, Long> {
 
     Optional<Relation> findByManagerAndCustomer(User manager, User customer);
 
-    List<Relation> findAllManger(User user);
+    List<Relation> findAllByManager(User manager);
 
     List<Relation> findAllByCustomer(User customer);
 
