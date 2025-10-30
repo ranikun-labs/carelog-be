@@ -1,5 +1,7 @@
 package carelog.carelog.relation.app;
 
+import carelog.carelog.common.web.exception.CustomException;
+import carelog.carelog.common.web.exception.ExceptionStatus;
 import carelog.carelog.relation.domain.*;
 import carelog.carelog.user.domain.*;
 import lombok.*;
@@ -17,37 +19,46 @@ public class RelationServiceImpl implements RelationService {
     private final UserRepository userRepository;
 
     @Override
+    @Transactional
     public Relation createRelation(User manger, User customer) {
-        return null;
+        if (relationRepository.existsByManagerAndCustomer(manger, customer)) {
+            throw new CustomException(ExceptionStatus.RELATION_ALREADY_EXISTS);
+        }
+        Relation relation = Relation.create(manger, customer);
+        return relationRepository.save(relation);
     }
 
     @Override
     public Optional<Relation> findRelationById(Long relationId) {
-        return Optional.empty();
+        return relationRepository.findById(relationId);
     }
 
     @Override
     public Optional<Relation> findRelationByManagerAndCustomer(User manager, User customer) {
-        return Optional.empty();
+        return relationRepository.findByManagerAndCustomer(manager, customer);
     }
 
     @Override
     public List<Relation> findAllRelationsByManager(User manager) {
-        return List.of();
+        return relationRepository.findAllByManager(manager);
     }
 
     @Override
     public List<Relation> findAllRelationsByCustomer(User customer) {
-        return List.of();
+        return relationRepository.findAllByCustomer(customer);
     }
 
     @Override
     public Relation updateRelationsStatus(Long relationId, RelationStatus newStatus) {
-        return null;
+        Relation relation = relationRepository.findById(relationId)
+                .orElseThrow(() -> new CustomException(ExceptionStatus.RELATION_NOT_FOUND));
+        relation.updateStatus(newStatus);
+        return relation;
     }
 
     @Override
+    @Transactional
     public void deleteRelation(Long relationId) {
-
+        relationRepository.deleteById(relationId);;
     }
 }
