@@ -1,5 +1,6 @@
 package carelog.carelog.user.app;
 
+import carelog.carelog.user.domain.User;
 import carelog.carelog.user.web.dto.UserCreateRequest;
 import carelog.carelog.user.web.dto.UserResponse;
 import carelog.carelog.user.web.dto.UserUpdateRequest;
@@ -7,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 public interface UserService {
     UserResponse createUser(UserCreateRequest request);
+    User findUserEntityById(Long id);
     UserResponse findUserById(Long id);
     UserResponse findUserByUserId(String userId);
     UserResponse findUserByEmail(String email);
