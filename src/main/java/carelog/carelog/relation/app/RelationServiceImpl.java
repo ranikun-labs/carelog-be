@@ -1,10 +1,10 @@
 package carelog.carelog.relation.app;
 
-import carelog.carelog.common.web.exception.CustomException;
-import carelog.carelog.common.web.exception.ExceptionStatus;
+import carelog.carelog.common.web.exception.*;
 import carelog.carelog.relation.domain.*;
 import carelog.carelog.user.domain.*;
 import lombok.*;
+import org.springframework.dao.*;
 import org.springframework.stereotype.*;
 import org.springframework.transaction.annotation.*;
 
@@ -18,14 +18,30 @@ public class RelationServiceImpl implements RelationService {
     private final RelationRepository relationRepository;
     private final UserRepository userRepository;
 
+    private User findUserById(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
+    }
+
+    
     @Override
     @Transactional
-    public Relation createRelation(User manger, User customer) {
-        if (relationRepository.existsByManagerAndCustomer(manger, customer)) {
+    public Relation createRelation(Long managerId, Long customerId) {
+        User manager = findUserById(managerId);
+        User customer = findUserById(customerId);
+
+        if (relationRepository.existsByManagerAndCustomer(manager, customer)) {
             throw new CustomException(ExceptionStatus.RELATION_ALREADY_EXISTS);
         }
-        Relation relation = Relation.create(manger, customer);
-        return relationRepository.save(relation);
+
+        Relation relation = Relation.create(manager, customer);
+
+        try {
+            return relationRepository.save(relation);
+        } catch (DataIntegrityViolationException e) {
+            // DB Unique 제약조건 위반 시 (동시성 문제)
+            throw new CustomException(ExceptionStatus.RELATION_ALREADY_EXISTS);
+        }
     }
 
     @Override
@@ -34,21 +50,27 @@ public class RelationServiceImpl implements RelationService {
     }
 
     @Override
-    public Optional<Relation> findRelationByManagerAndCustomer(User manager, User customer) {
+    public Optional<Relation> findRelationByManagerAndCustomer(Long managerId, Long customerId) {
+        User manager = findUserById(managerId);
+        User customer = findUserById(customerId);
         return relationRepository.findByManagerAndCustomer(manager, customer);
     }
 
     @Override
-    public List<Relation> findAllRelationsByManager(User manager) {
+    public List<Relation> findAllRelationsByManager(Long managerId) {
+        User manager = findUserById(managerId);
         return relationRepository.findAllByManager(manager);
     }
 
     @Override
-    public List<Relation> findAllRelationsByCustomer(User customer) {
+    public List<Relation> findAllRelationsByCustomer(Long customerId) {
+        User customer = findUserById(customerId);
         return relationRepository.findAllByCustomer(customer);
     }
 
+
     @Override
+    @Transactional
     public Relation updateRelationsStatus(Long relationId, RelationStatus newStatus) {
         Relation relation = relationRepository.findById(relationId)
                 .orElseThrow(() -> new CustomException(ExceptionStatus.RELATION_NOT_FOUND));
@@ -59,6 +81,9 @@ public class RelationServiceImpl implements RelationService {
     @Override
     @Transactional
     public void deleteRelation(Long relationId) {
-        relationRepository.deleteById(relationId);;
+        Relation relation = relationRepository.findById(relationId)
+                .orElseThrow(() -> new CustomException(ExceptionStatus.RELATION_NOT_FOUND));
+
+        relationRepository.delete(relation);
     }
 }

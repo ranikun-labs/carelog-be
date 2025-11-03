@@ -9,15 +9,15 @@ import java.util.Optional;
 
 public interface RelationService {
 
-    Relation createRelation(User manager, User customer);
+    Relation createRelation(Long managerId, Long customerId);
 
     Optional<Relation> findRelationById(Long relationId);
 
-    Optional<Relation> findRelationByManagerAndCustomer(User manager, User customer);
+    Optional<Relation> findRelationByManagerAndCustomer(Long managerId, Long customerId);
 
-    List<Relation> findAllRelationsByManager(User manager);
+    List<Relation> findAllRelationsByManager(Long managerId);
 
-    List<Relation> findAllRelationsByCustomer(User customer);
+    List<Relation> findAllRelationsByCustomer(Long customerId);
 
     Relation updateRelationsStatus(Long relationId, RelationStatus newStatus);
 
