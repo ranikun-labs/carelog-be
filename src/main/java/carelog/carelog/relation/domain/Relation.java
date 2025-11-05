@@ -11,12 +11,7 @@ import org.hibernate.annotations.*;
 @Entity
 @SQLDelete(sql = "UPDATE relations SET deleted_at = NOW() WHERE id = ?")
 @SQLRestriction("deleted_at IS NULL")
-@Table(name = "relations", uniqueConstraints = {
-        @UniqueConstraint(
-                name = "uk_manager_customer",
-                columnNames = {"manager_id", "customer_id"}
-        )
-})
+@Table(name = "relations")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Relation extends BaseEntity {
