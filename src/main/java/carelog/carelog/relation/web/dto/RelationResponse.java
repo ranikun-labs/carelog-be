@@ -7,13 +7,13 @@ import lombok.Getter;
 @Getter
 public class RelationResponse {
     private final int id;
-    private final Long mangerId;
+    private final Long managerId;
     private final Long customerId;
     private final RelationStatus status;
 
-    private RelationResponse(int id, Long mangerId, Long customerId, RelationStatus status) {
+    private RelationResponse(int id, Long managerId, Long customerId, RelationStatus status) {
         this.id = id;
-        this.mangerId = mangerId;
+        this.managerId = mangerId;
         this.customerId = customerId;
         this.status = status;
     }
