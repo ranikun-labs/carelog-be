@@ -7,7 +7,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public enum RelationStatus {
     ACTIVE("ACTIVE", "활성"),
-    TERMINATED("ENDED", "종료");
+    TERMINATED("TERMINATED", "종료");
 
     private final String key;
     private final String title;
