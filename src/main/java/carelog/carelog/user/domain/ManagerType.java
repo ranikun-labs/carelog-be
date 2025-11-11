@@ -5,10 +5,10 @@ import lombok.RequiredArgsConstructor;
 
 @Getter
 @RequiredArgsConstructor
-public enum UserRole {
-    MANAGER("MANAGER", "관리자"),
-    CUSTOMER("CUSTOMER", "고객");
+public enum ManagerType {
+    PHYSICAL_THERAPIST("PHYSICAL_THERAPIST", "도수치료사");
 
     private final String key;
     private final String title;
+
 }

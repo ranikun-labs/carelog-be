@@ -1,16 +1,12 @@
 package carelog.carelog.user.app;
 
-import carelog.carelog.common.web.exception.CustomException;
-import carelog.carelog.common.web.exception.ExceptionStatus;
-import carelog.carelog.user.domain.User;
-import carelog.carelog.user.domain.UserRepository;
-import carelog.carelog.user.web.dto.UserCreateRequest;
-import carelog.carelog.user.web.dto.UserResponse;
-import carelog.carelog.user.web.dto.UserUpdateRequest;
-import lombok.RequiredArgsConstructor;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import carelog.carelog.common.web.exception.*;
+import carelog.carelog.user.domain.*;
+import carelog.carelog.user.web.dto.*;
+import lombok.*;
+import org.springframework.security.crypto.password.*;
+import org.springframework.stereotype.*;
+import org.springframework.transaction.annotation.*;
 
 @Service
 @RequiredArgsConstructor
@@ -19,6 +15,11 @@ public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+
+    private User findUserEntityById(Long id) {
+        return userRepository.findById(id)
+                .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
+    }
 
     @Override
     @Transactional
@@ -46,8 +47,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserResponse findUserById(Long id) {
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
+        User user = findUserEntityById(id);
         return UserResponse.from(user);
     }
 

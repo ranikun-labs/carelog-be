@@ -1,5 +1,6 @@
 package carelog.carelog.user.app;
 
+import carelog.carelog.user.domain.User;
 import carelog.carelog.user.web.dto.UserCreateRequest;
 import carelog.carelog.user.web.dto.UserResponse;
 import carelog.carelog.user.web.dto.UserUpdateRequest;

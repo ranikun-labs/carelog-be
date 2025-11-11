@@ -1,13 +1,13 @@
-package carelog.carelog.user.domain;
+package carelog.carelog.relation.domain;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
 @Getter
 @RequiredArgsConstructor
-public enum UserRole {
-    MANAGER("MANAGER", "관리자"),
-    CUSTOMER("CUSTOMER", "고객");
+public enum RelationStatus {
+    ACTIVE("ACTIVE", "활성"),
+    TERMINATED("TERMINATED", "종료");
 
     private final String key;
     private final String title;
