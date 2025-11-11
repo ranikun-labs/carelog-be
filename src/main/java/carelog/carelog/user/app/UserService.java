@@ -8,7 +8,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 public interface UserService {
     UserResponse createUser(UserCreateRequest request);
-    User findUserEntityById(Long id);
     UserResponse findUserById(Long id);
     UserResponse findUserByUserId(String userId);
     UserResponse findUserByEmail(String email);
