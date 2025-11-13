@@ -7,6 +7,7 @@ import org.springframework.security.config.annotation.web.configuration.*;
 import org.springframework.security.crypto.bcrypt.*;
 import org.springframework.security.crypto.password.*;
 import org.springframework.security.web.*;
+import org.springframework.security.web.util.matcher.*;
 
 @Configuration
 @EnableWebSecurity
@@ -18,10 +19,22 @@ public class SecurityConfig {
         http
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/", "/login", "/api/auth/signup").permitAll()
+                        // 운영용이라 차후에 활성화
+                        .requestMatchers(
+                                new AntPathRequestMatcher("/"),
+                                new AntPathRequestMatcher("/api/v1"),
+                                new AntPathRequestMatcher("/api/v1/"),
+                                new AntPathRequestMatcher("/login"),
+                                new AntPathRequestMatcher("/api/auth/signup"),
+                                new AntPathRequestMatcher("/users"),
+                                new AntPathRequestMatcher("/api/health"),
+                                new AntPathRequestMatcher("/error**"),
+                                new AntPathRequestMatcher("/api/v1/error**")
+                        ).permitAll()
                         .requestMatchers("/css/**", "/js/**", "/images/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll() // API 문서 허용
                         .anyRequest().authenticated());
+
         return http.build();
     }
 
