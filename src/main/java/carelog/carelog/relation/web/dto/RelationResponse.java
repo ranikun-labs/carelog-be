@@ -1,19 +1,18 @@
 package carelog.carelog.relation.web.dto;
 
-import carelog.carelog.relation.domain.Relation;
-import carelog.carelog.relation.domain.RelationStatus;
-import lombok.Getter;
+import carelog.carelog.relation.domain.*;
+import lombok.*;
 
 @Getter
 public class RelationResponse {
-    private final int id;
+    private final Long id;
     private final Long managerId;
     private final Long customerId;
     private final RelationStatus status;
 
-    private RelationResponse(int id, Long managerId, Long customerId, RelationStatus status) {
+    private RelationResponse(Long id, Long managerId, Long customerId, RelationStatus status) {
         this.id = id;
-        this.managerId = mangerId;
+        this.managerId = managerId;
         this.customerId = customerId;
         this.status = status;
     }
