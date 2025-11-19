@@ -1,16 +1,13 @@
 package carelog.carelog.user.web.dto;
 
-import carelog.carelog.user.domain.UserRole;
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import carelog.carelog.user.domain.*;
+import jakarta.validation.constraints.*;
+import lombok.*;
 
 @Getter
 @NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class UserCreateRequest {
 
     @NotBlank(message = "사용자의 ID는 필수 입력 값입니다.")
