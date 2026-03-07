@@ -40,8 +40,9 @@
 | 순서 | 항목 | 상태 | 비고 |
 |------|------|------|------|
 | 1-1 | `build.gradle.kts` Kotlin DSL 전환 | 완료 | Lombok 제거, MockK/Kotest 추가 |
-| 1-2 | BaseEntity Kotlin 전환 | 진행중 | Audit 필드 중심 (deletedAt/tenantId/version 제외) |
-| 1-3 | Common 계층 Kotlin 전환 | 대기 | Exception, DTO, Config 계층 변환 |
+| 1-2 | BaseEntity Kotlin 전환 | 완료 | Audit 필드 중심 (deletedAt/tenantId/version 제외) |
+| 1-3 | Common 계층 Kotlin 전환 | 진행중 | Exception, DTO, Config 계층 변환 |
+| 1-3a | Common 계층 보완 요소 추가 (Kotlin) | 대기 | `ClockConfig`, `ErrorCode` interface, `GlobalResponseCustomizer`, `OpenApiConfig` 개선 |
 | 1-4 | 핵심 도메인(User, Relation) Kotlin 전환 | 대기 | Java to Kotlin 변환 및 Idiomatic 리팩토링 |
 | 1-5 | 테스트 코드 Kotlin 전환 | 대기 | MockK/Kotest 적용 |
 
