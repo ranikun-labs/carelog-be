@@ -1,6 +1,6 @@
 # 현재 작업 컨텍스트
 
-> 최종 업데이트: 2026-03-07 (Kotlin 마이그레이션 진행중)
+> 최종 업데이트: 2026-03-09 (엔티티 상속 구조 및 멀티테넌시 설계 확정)
 
 ---
 
@@ -27,11 +27,59 @@
 
 ## 📋 설계 결정사항
 
-- **BaseEntity = Audit 필드만** (`createdAt`, `updatedAt`, `createdBy`, `updatedBy`)
-- **SoftDelete(`deletedAt`)** — 전체 공통 아님. 필요한 엔티티(User, Relation 등)에만 개별 적용
-- **`tenantId`** — BaseEntity가 아닌 테넌트 식별이 필요한 엔티티에만 개별 적용
-- **`@Version`(낙관적 락)** — 동시 수정 충돌 우려 엔티티에만 선택 적용 (예: appointments, patients)
-- **일지(Journal) 도메인** — 의료법상 삭제 불가(최소 5년 보관), Repository에서 delete 차단
+### 엔티티 상속 구조
+```
+BaseEntity (Audit 필드만)
+├── SystemAuditLog
+└── TenantBaseEntity (organizationId 추가)
+    ├── User
+    ├── Relation
+    ├── Journal
+    └── TenantAuditLog
+```
+
+- **BaseEntity** — `createdAt`, `updatedAt`, `createdBy`, `updatedBy` 감사 필드만
+- **TenantBaseEntity** — `BaseEntity` 상속 + `organizationId`. Hibernate Filter 이 레벨에 선언
+- **SystemAuditLog** — `BaseEntity` 상속, 인증 실패/시스템 오류 등 전역 로그
+
+### 도메인별 추가 필드
+
+| 엔티티 | 추가 선언 | 이유 |
+|--------|----------|------|
+| User | `deletedAt` | soft delete 필요 |
+| Relation | `deletedAt`, `@Version` | soft delete + 동시 수정 충돌 |
+| Journal | `status` (ACTIVE/SUPERSEDED) | 삭제 불가, SUPERSEDED 패턴 |
+| TenantAuditLog | - | append-only |
+| SystemAuditLog | - | append-only |
+
+### 역할 구분
+- `User.role` = MANAGER / STAFF / ADMIN
+- `Relation.type` = CLIENT / TENANT / PATIENT
+
+### 멀티테넌시 전략
+- **organization_id 기반 Shared Schema (논리 격리)** 채택
+- Hibernate Filter로 `WHERE organization_id = ?` 자동 적용
+- JWT에 `userId` + `role` + `organizationId` 클레임 포함
+
+### 삭제 전략
+
+| 패턴 | 적용 대상 |
+|------|----------|
+| SoftDelete (`deletedAt`) | User, Relation |
+| SUPERSEDED 패턴 | Journal |
+| append-only (삭제 없음) | TenantAuditLog, SystemAuditLog |
+
+### Journal 삭제 방어 3계층
+1. **DB 레벨** — 앱 계정 DELETE 권한 없음
+2. **Repository 레벨** — `delete()` 오버라이드 → 예외 throw
+3. **도메인 레벨** — SUPERSEDED 패턴으로 수정 시 새 INSERT 처리
+
+### DB 계정 권한
+
+| 계정 | 권한 |
+|------|------|
+| 앱 실행 계정 | SELECT, INSERT, UPDATE |
+| Flyway 계정 | DDL 포함 전체 |
 
 ## 📋 다음 작업
 
