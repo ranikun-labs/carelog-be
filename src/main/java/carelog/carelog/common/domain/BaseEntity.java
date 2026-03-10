@@ -24,9 +24,6 @@ public abstract class BaseEntity {
     @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
 
-    @Column(name = "deleted_at")
-    private OffsetDateTime deletedAt;
-
     @CreatedBy
     @Column(name = "created_by", updatable = false)
     private String createdBy;
@@ -35,7 +32,4 @@ public abstract class BaseEntity {
     @Column(name = "updated_by")
     private String updatedBy;
 
-    public boolean isDeleted() {
-        return this.deletedAt != null;
-    }
 }
