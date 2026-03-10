@@ -7,8 +7,11 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
+import java.util.UUID;
 
 public interface UserRepository extends JpaRepository<User, Long> {
+
+    Optional<User> findByPublicId(UUID publicId);
 
     Optional<User> findByEmail(String email);
 
@@ -17,8 +20,4 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByUserId(String userId);
 
     boolean existsByUserId(String userId);
-
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select u from User u where u.id = :id")
-    Optional<User> findByIdForUpdate(@Param("id") Long id);
 }

@@ -3,8 +3,10 @@
 ```
 Table users {
 id bigint [pk, increment]
-// 🔒 외부 노출용 식별자 (Sequential ID 노출 방지)
+// 🔒 외부 노출용 UUID - Spring Cloud Gateway, FastAPI 등 외부 시스템에서 순차 ID 노출 방지
 public_id uuid [unique, not null, default: `gen_random_uuid()`]
+// 🏢 멀티테넌시 식별자 - JWT 클레임에서 주입, 동일 조직 유저들이 같은 값 공유
+organization_id uuid [not null]
 
 user_id varchar(50) [unique, not null]
 email varchar(255) [unique, not null]
@@ -12,28 +14,37 @@ password varchar(255) [not null] // BCrypt Hash
 name varchar(100) [not null]
 
 role varchar(20) [not null] // 'MANAGER', 'CUSTOMER'
-// MANAGER 필수, CUSTOMER는 NULL (도메인 확장 대비)
-profession_type varchar(30) // 'PHYSICAL_THERAPY', 'REAL_ESTATE'
+// MANAGER 필수, CUSTOMER는 NULL
+manager_type varchar(30) // 'PHYSICAL_THERAPIST', 'REAL_ESTATE_AGENT' 등
 
 // v1.1 암호화 적용 예정 (JPA Converter)
 phone_encrypted text
 address_encrypted text
 
-created_at timestamptz [default: `now()`]
-updated_at timestamptz [default: `now()`]
+created_at timestamptz [not null, default: `now()`]
+updated_at timestamptz [not null, default: `now()`]
 deleted_at timestamptz
+created_by varchar(255)
+updated_by varchar(255)
 
 Indexes {
-// [필수] 데이터 무결성 및 로그인 성능용
 (email) [unique, name: 'uk_user_email']
 (user_id) [unique, name: 'uk_user_user_id']
 (public_id) [unique, name: 'uk_user_public_id']
+(organization_id) [name: 'idx_user_organization']
 }
 
 Note: '''
-[확장성 설계]
-- public_id: MSA 전환 및 외부 API 연동 시 내부 PK 은닉을 위해 도입
-- profession_type: 단일 플랫폼에서 여러 직군(물리치료, 부동산 등)을 수용하기 위한 Discriminator Column
+[User 역할 전략]
+- MANAGER/CUSTOMER 단일 테이블 관리 (Single Table)
+- manager_type: MANAGER일 때만 필수, CUSTOMER는 NULL
+- 가입 엔드포인트 분리: POST /users/managers, POST /users/customers
+- 서비스 레이어에서 role에 따라 manager_type 필수 여부 검증
+
+[식별자 전략]
+- id: 내부 PK (JPA 연관관계, DB 조인용)
+- public_id: 외부 노출용 UUID (Gateway 라우팅, FastAPI 연동 시 사용)
+- organization_id: 멀티테넌시 격리용 (Hibernate Filter로 자동 WHERE 조건 적용)
   '''
   }
 
@@ -55,18 +66,21 @@ Indexes {
 ```
 Table relations {
 id bigint [pk, increment]
+organization_id uuid [not null]
 manager_id bigint [ref: > users.id]
 customer_id bigint [ref: > users.id]
 status varchar(20) [not null] // 'ACTIVE', 'TERMINATED'
 
-created_at timestamptz
-updated_at timestamptz
+created_at timestamptz [not null, default: `now()`]
+updated_at timestamptz [not null, default: `now()`]
 deleted_at timestamptz
+created_by varchar(255)
+updated_by varchar(255)
 
 Indexes {
-// [필수] FK 조인 성능 방어
 (manager_id) [name: 'idx_relation_manager']
 (customer_id) [name: 'idx_relation_customer']
+(organization_id) [name: 'idx_relation_organization']
 }
 
 Note: '''
@@ -78,7 +92,6 @@ Note: '''
 - 고객이 탈퇴 후 재가입하거나, 1년 뒤 재방문하는 시나리오 유연 대응
 
 [How?]
-- Service Layer: 비관적 락(Pessimistic Lock)으로 동시성 제어
 - 로직: `deleted_at IS NULL`인 활성 관계가 없을 때만 생성 허용
   '''
   }

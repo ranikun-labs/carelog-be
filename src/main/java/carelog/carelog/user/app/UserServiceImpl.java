@@ -23,7 +23,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
-    public UserResponse createUser(UserCreateRequest request) {
+    public UserResponse createManager(ManagerCreateRequest request) {
         if (userRepository.existsByUserId(request.getUserId())) {
             throw new CustomException(ExceptionStatus.DUPLICATE_USER_ID);
         }
@@ -36,9 +36,23 @@ public class UserServiceImpl implements UserService {
                 .password(passwordEncoder.encode(request.getPassword()))
                 .email(request.getEmail())
                 .name(request.getName())
-                .role(request.getRole())
+                .role(UserRole.MANAGER)
+                .managerType(request.getManagerType())
                 .phoneEncrypted(request.getPhoneEncrypted())
                 .addressEncrypted(request.getAddressEncrypted())
+                .build();
+
+        User savedUser = userRepository.save(newUser);
+        return UserResponse.from(savedUser);
+    }
+
+    @Override
+    @Transactional
+    public UserResponse createCustomer(CustomerCreateRequest request) {
+
+        User newUser = User.builder()
+                .name(request.getName())
+                .role(UserRole.CUSTOMER)
                 .build();
 
         User savedUser = userRepository.save(newUser);

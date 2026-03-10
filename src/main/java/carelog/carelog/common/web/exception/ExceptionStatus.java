@@ -9,8 +9,10 @@ public enum ExceptionStatus {
 
     // 400 BAD_REQUEST
     INVALID_USER_ROLE(HttpStatus.BAD_REQUEST, "유효하지 않은 사용자 역할입니다."),
+    INVALID_MANAGER_FIELDS(HttpStatus.BAD_REQUEST, "매니저는 아이디, 이메일, 비밀번호, 직군이 필수입니다."),
 
-    // 404 NOT_FOUND
+
+   // 404 NOT_FOUND
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."),
     RELATION_NOT_FOUND(HttpStatus.NOT_FOUND, "관계를 찾을 수 없습니다."),
 
