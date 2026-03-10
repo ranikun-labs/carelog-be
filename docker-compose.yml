@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:16
+    container_name: carelog-db
+    environment:
+      POSTGRES_DB: carelog
+      POSTGRES_USER: carelog
+      POSTGRES_PASSWORD: carelog
+    ports:
+      - "5432:5432"
+    volumes:
+      - carelog-db-data:/var/lib/postgresql/data
+
+volumes:
+  carelog-db-data:
