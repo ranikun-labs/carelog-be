@@ -50,6 +50,7 @@ dependencies {
     runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.3")
     runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.3")
     implementation("com.github.ulisesbocchio:jasypt-spring-boot-starter:3.0.5")
+    implementation("org.springframework.security:spring-security-config")
 
     // ──────────────── API 문서 & DB ────────────────
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.0")
