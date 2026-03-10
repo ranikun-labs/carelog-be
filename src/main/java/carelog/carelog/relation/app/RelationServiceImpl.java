@@ -2,9 +2,9 @@ package carelog.carelog.relation.app;
 
 import carelog.carelog.common.web.exception.*;
 import carelog.carelog.relation.domain.*;
+import carelog.carelog.relation.web.dto.*;
 import carelog.carelog.user.domain.*;
 import lombok.*;
-import org.springframework.dao.*;
 import org.springframework.stereotype.*;
 import org.springframework.transaction.annotation.*;
 
@@ -22,15 +22,11 @@ public class RelationServiceImpl implements RelationService {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
     }
-
-    private User findUserByIdForUpdate(Long userId) {
-        return userRepository.findByIdForUpdate(userId)
-                .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
-    }
+    
 
     @Override
     @Transactional
-    public Relation createRelation(Long managerId, Long customerId) {
+    public RelationResponse createRelation(Long managerId, Long customerId) {
         // 1. User 조회 (락 없음 - 성능 최적화)
         // User 테이블은 병목이 되기 쉬우므로, 여기서는 락을 걸지 않습니다.
         User manager = findUserById(managerId);
@@ -55,41 +51,51 @@ public class RelationServiceImpl implements RelationService {
         // 3번 락이 통과되었다면, 이제 이 조합은 '내 차지'이므로 안전합니다.
         // DB 제약이 없으므로, 이제 'try-catch' 블록은 필요 없습니다.
         Relation relation = Relation.create(manager, customer);
-        return relationRepository.save(relation);
+        Relation savedRelation = relationRepository.save(relation);
+        return RelationResponse.from(savedRelation);
     }
 
     @Override
-    public Optional<Relation> findRelationById(Long relationId) {
-        return relationRepository.findById(relationId);
+    public RelationResponse findRelationById(Long relationId) {
+        Relation relation = relationRepository.findById(relationId)
+                .orElseThrow(() -> new CustomException(ExceptionStatus.RELATION_NOT_FOUND));
+        return RelationResponse.from(relation);
     }
 
     @Override
-    public Optional<Relation> findRelationByManagerAndCustomer(Long managerId, Long customerId) {
+    public RelationResponse findRelationByManagerAndCustomer(Long managerId, Long customerId) {
         User manager = findUserById(managerId);
         User customer = findUserById(customerId);
-        return relationRepository.findByManagerAndCustomer(manager, customer);
+        Relation relation = relationRepository.findByManagerAndCustomer(manager, customer)
+                .orElseThrow(() -> new CustomException(ExceptionStatus.RELATION_NOT_FOUND));
+        return RelationResponse.from(relation);
     }
 
     @Override
-    public List<Relation> findAllRelationsByManager(Long managerId) {
+    public List<RelationResponse> findAllRelationsByManager(Long managerId) {
         User manager = findUserById(managerId);
-        return relationRepository.findAllByManager(manager);
+        List<Relation> relations = relationRepository.findAllByManager(manager);
+        return relations.stream()
+                .map(RelationResponse::from)
+                .toList();
     }
 
     @Override
-    public List<Relation> findAllRelationsByCustomer(Long customerId) {
+    public List<RelationResponse> findAllRelationsByCustomer(Long customerId) {
         User customer = findUserById(customerId);
-        return relationRepository.findAllByCustomer(customer);
+        List<Relation> relations = relationRepository.findAllByCustomer(customer);
+        return relations.stream()
+                .map(RelationResponse::from)
+                .toList();
     }
-
 
     @Override
     @Transactional
-    public Relation updateRelationsStatus(Long relationId, RelationStatus newStatus) {
+    public RelationResponse updateRelationsStatus(Long relationId, RelationStatus newStatus) {
         Relation relation = relationRepository.findById(relationId)
                 .orElseThrow(() -> new CustomException(ExceptionStatus.RELATION_NOT_FOUND));
         relation.updateStatus(newStatus);
-        return relation;
+        return RelationResponse.from(relation);
     }
 
     @Override

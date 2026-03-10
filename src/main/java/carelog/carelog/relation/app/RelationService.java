@@ -1,25 +1,23 @@
 package carelog.carelog.relation.app;
 
-import carelog.carelog.relation.domain.Relation;
-import carelog.carelog.relation.domain.RelationStatus;
-import carelog.carelog.user.domain.User;
+import carelog.carelog.relation.domain.*;
+import carelog.carelog.relation.web.dto.*;
 
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 public interface RelationService {
 
-    Relation createRelation(Long managerId, Long customerId);
+    RelationResponse createRelation(Long managerId, Long customerId);
 
-    Optional<Relation> findRelationById(Long relationId);
+    RelationResponse findRelationById(Long relationId);
 
-    Optional<Relation> findRelationByManagerAndCustomer(Long managerId, Long customerId);
+    RelationResponse findRelationByManagerAndCustomer(Long managerId, Long customerId);
 
-    List<Relation> findAllRelationsByManager(Long managerId);
+    List<RelationResponse> findAllRelationsByManager(Long managerId);
 
-    List<Relation> findAllRelationsByCustomer(Long customerId);
+    List<RelationResponse> findAllRelationsByCustomer(Long customerId);
 
-    Relation updateRelationsStatus(Long relationId, RelationStatus newStatus);
+    RelationResponse updateRelationsStatus(Long relationId, RelationStatus newStatus);
 
     void deleteRelation(Long relationId);
 }
