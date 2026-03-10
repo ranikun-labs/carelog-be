@@ -1,12 +1,18 @@
 package carelog.carelog.relation.domain;
 
-import carelog.carelog.common.domain.*;
-import carelog.carelog.common.web.exception.*;
-import carelog.carelog.user.domain.*;
+import carelog.carelog.common.domain.TenantBaseEntity;
+import carelog.carelog.common.web.exception.CustomException;
+import carelog.carelog.common.web.exception.ExceptionStatus;
+import carelog.carelog.user.domain.User;
+import carelog.carelog.user.domain.UserRole;
 import jakarta.persistence.*;
-import jakarta.persistence.Table;
-import lombok.*;
-import org.hibernate.annotations.*;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
+
+import java.time.OffsetDateTime;
 
 @Entity
 @SQLDelete(sql = "UPDATE relations SET deleted_at = NOW() WHERE id = ?")
@@ -14,7 +20,7 @@ import org.hibernate.annotations.*;
 @Table(name = "relations")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class Relation extends BaseEntity {
+public class Relation extends TenantBaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -31,6 +37,9 @@ public class Relation extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     private RelationStatus status;
+
+    @Column(name = "deleted_at")
+    private OffsetDateTime deletedAt;
 
     private Relation(User manager, User customer, RelationStatus status) {
         this.manager = manager;
