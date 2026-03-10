@@ -2,7 +2,8 @@ package carelog.carelog.user.web;
 
 import carelog.carelog.common.web.dto.response.ApiResponse;
 import carelog.carelog.user.app.UserService;
-import carelog.carelog.user.web.dto.UserCreateRequest;
+import carelog.carelog.user.web.dto.CustomerCreateRequest;
+import carelog.carelog.user.web.dto.ManagerCreateRequest;
 import carelog.carelog.user.web.dto.UserResponse;
 import carelog.carelog.user.web.dto.UserUpdateRequest;
 import jakarta.validation.Valid;
@@ -17,9 +18,15 @@ public class UserController {
 
     private final UserService userService;
 
-    @PostMapping
-    public ResponseEntity<ApiResponse<UserResponse>> createUser(@Valid @RequestBody UserCreateRequest request) {
-        UserResponse response = userService.createUser(request);
+    @PostMapping("/managers")
+    public ResponseEntity<ApiResponse<UserResponse>> createManager(@Valid @RequestBody ManagerCreateRequest request) {
+        UserResponse response = userService.createManager(request);
+        return ApiResponse.created(response);
+    }
+
+    @PostMapping("/customers")
+    public ResponseEntity<ApiResponse<UserResponse>> createCustomer(@Valid @RequestBody CustomerCreateRequest request) {
+        UserResponse response = userService.createCustomer(request);
         return ApiResponse.created(response);
     }
 
