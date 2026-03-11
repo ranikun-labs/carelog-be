@@ -36,10 +36,8 @@ springdoc:
 
 logging:
   level:
-#    root: DEBUG
-    carelog.carelog: DEBUG
-    carelog.carelog.common.config.LoggingAspect: INFO
-    org.hibernate.type.descriptor.sql: trace
-    org.springframework.security: DEBUG
+    carelog.carelog: INFO
+    org.springframework.security: WARN
+    org.hibernate.type.descriptor.sql: WARN
 
 
