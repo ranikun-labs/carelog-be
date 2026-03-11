@@ -1,12 +1,16 @@
 package carelog.carelog.user.app;
 
+import carelog.carelog.auth.app.CustomUserDetails;
 import carelog.carelog.common.web.exception.*;
 import carelog.carelog.user.domain.*;
 import carelog.carelog.user.web.dto.*;
 import lombok.*;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.*;
 import org.springframework.stereotype.*;
 import org.springframework.transaction.annotation.*;
+
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -42,6 +46,7 @@ public class UserServiceImpl implements UserService {
                 .addressEncrypted(request.getAddressEncrypted())
                 .build();
 
+        newUser.assignOrganization(UUID.randomUUID());
         User savedUser = userRepository.save(newUser);
         return UserResponse.from(savedUser);
     }
@@ -50,11 +55,16 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public UserResponse createCustomer(CustomerCreateRequest request) {
 
+        CustomUserDetails userDetails = (CustomUserDetails) SecurityContextHolder
+                .getContext().getAuthentication().getPrincipal();
+
         User newUser = User.builder()
                 .name(request.getName())
                 .role(UserRole.CUSTOMER)
                 .build();
 
+
+        newUser.assignOrganization(userDetails.getOrganizationId());
         User savedUser = userRepository.save(newUser);
         return UserResponse.from(savedUser);
     }
