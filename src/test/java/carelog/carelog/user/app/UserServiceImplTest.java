@@ -27,7 +27,7 @@ class UserServiceImplTest {
     @Test
     void createUser_success() {
         // given: 테스트에 필요한 요청 객체와 Mock 객체의 동작을 설정
-        UserCreateRequest request = UserCreateRequest.builder()
+        ManagerCreateRequest request = ManagerCreateRequest.builder()
                 .userId("testuser")
                 .password("password123")
                 .email("test@example.com")
