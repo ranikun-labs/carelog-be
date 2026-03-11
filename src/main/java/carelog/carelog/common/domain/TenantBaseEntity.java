@@ -20,4 +20,8 @@ public abstract class TenantBaseEntity extends BaseEntity {
 
     @Column(name = "organization_id", nullable = false, updatable = false)
     private UUID organizationId;
+
+    public void assignOrganization(UUID organizationId) {
+        this.organizationId = organizationId;
+    }
 }

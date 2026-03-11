@@ -1,6 +1,6 @@
 # 현재 작업 컨텍스트
 
-> 최종 업데이트: 2026-03-10
+> 최종 업데이트: 2026-03-11
 
 ---
 
@@ -27,6 +27,8 @@
 - [x] BaseEntity에서 deletedAt 제거 → User, Relation 개별 선언으로 이동
 - [x] Relation에 @Version 추가 (낙관적 락)
 - [x] 로컬 개발용 Docker PostgreSQL 환경 구성
+- [x] JWT 인증 체계 구축 (Access/Refresh Token, 로그인·로그아웃·재발급)
+- [x] ThreadLocal + AOP 기반 멀티테넌트 자동 격리 (TenantContext, TenantFilter, TenantAspect)
 
 ---
 
@@ -67,6 +69,38 @@ BaseEntity (Audit 필드만: createdAt, updatedAt, createdBy, updatedBy)
 - Hibernate Filter로 `WHERE organization_id = ?` 자동 적용
 - JWT에 `userId` + `role` + `organizationId` 클레임 포함
 
+#### Organization 도메인 전략
+- **MVP**: Organization 테이블 없음. 매니저 가입 시 `UUID.randomUUID()`로 organizationId 생성 → User에 직접 저장
+- **의도적 비정규화**: 매니저 1명 = 조직 1개이므로 MVP에서 구분 불필요
+- **Customer organizationId**: 매니저 소속 고객은 동일한 organizationId 공유 (JWT 클레임에서 꺼내 주입) → Hibernate Filter 동작 조건
+- **추후**: STAFF 추가/멀티테넌시 본격화 시점에 Organization 엔티티 추가 + Flyway 마이그레이션
+
+##### Organization 테이블 확장 시 마이그레이션 전략
+```sql
+-- 1. organizations 테이블 생성
+CREATE TABLE organizations (
+    id      BIGINT PRIMARY KEY,
+    public_id UUID UNIQUE NOT NULL,  -- 현재 users.organization_id 값 재사용
+    name    VARCHAR NOT NULL
+);
+
+-- 2. 기존 users 데이터에서 organization 추출
+INSERT INTO organizations (public_id, name)
+SELECT DISTINCT organization_id, 'temp-name'
+FROM users WHERE role = 'MANAGER';
+
+-- 3. FK 추가 (데이터 재생성 없이 UUID 값 그대로 연결)
+ALTER TABLE users
+ADD CONSTRAINT fk_users_org
+FOREIGN KEY (organization_id) REFERENCES organizations(public_id);
+```
+> 핵심: `users.organization_id`(UUID) = `organizations.public_id` → 기존 데이터 파괴 없이 FK 연결 가능
+
+##### MVP에서 Organization 테이블을 두지 않는 이유
+- Organization 테이블이 있었다면: Organization 생성 → ID 반환 → User FK 연결 순서로 트랜잭션 범위 확대
+- cascade 설계, 조인 쿼리, 별도 Repository 필요
+- 매니저 1명 = 조직 1개인 지금은 그 복잡도가 이득보다 큼 → UUID 값 복사로 대체
+
 ### 삭제 전략
 | 패턴 | 적용 대상 |
 |------|----------|
@@ -98,17 +132,86 @@ BaseEntity (Audit 필드만: createdAt, updatedAt, createdBy, updatedBy)
 > ⚠️ `POST /users/customers`는 개발용으로만 유지.
 > 실제 운용에서는 `POST /relations` 호출 시 Customer 생성 + Relation 연결을 하나의 트랜잭션으로 처리해야 함.
 
-### Step 2: `feat/security-jwt` (carelog-be)
+### SCG + JWT 인증/인가 전체 아키텍처
 
-> ⚠️ Hibernate 테넌트 필터(`organizationFilter`)는 현재 선언만 된 상태. JWT 구현 후 Security Filter에서 `session.enableFilter("organizationFilter").setParameter("organizationId", ...)` 활성화해야 실제 테넌트 격리가 동작함.
+#### 전체 흐름
+```
+클라이언트
+    ↓ HTTPS
+Cloudflare Tunnel
+    ↓
+SCG (외부 유일 노출)
+    ├── JWT 서명 검증 (stateless)
+    ├── Redis Blacklist 체크
+    └── X-User-Id, X-Organization-Id, X-Role, X-Public-Id 헤더 추가
+    ↓ 내부망
+carelog-be (외부 직접 접근 불가)
+    ├── 헤더에서 유저 정보 추출
+    ├── Hibernate Filter 활성화 (organizationId)
+    └── 비즈니스 로직
+```
+
+#### 저장소 역할
+| 저장소 | 데이터 | 이유 |
+|--------|--------|------|
+| 클라이언트 | Access Token + Refresh Token | - |
+| Redis | Blacklist된 Access Token | TTL = 남은 유효기간, 만료 시 자동 삭제 |
+| RDB | Refresh Token | 상태 관리 필요 (재사용 감지, 강제 만료) |
+
+#### Access Token 클레임
+```
+subject: userId
+claims: {
+    organizationId: "uuid",
+    role: "MANAGER",
+    publicId: "uuid"   ← FastAPI RAG 서버 연동 시 필요
+}
+TTL: 30분
+```
+
+#### 로그인 / 갱신 / 로그아웃 흐름
+| 작업 | 처리 |
+|------|------|
+| 로그인 | ID/PW 검증 → Access + Refresh 발급 → Refresh → RDB 저장 |
+| 갱신 | RDB Refresh 검증 → 새 Access 발급 → Refresh Rotation (기존 삭제 + 신규 저장) |
+| 로그아웃 | Access Token → Redis Blacklist 추가 (TTL = 남은 유효기간) + RDB Refresh 삭제 |
+
+#### Step 2 → Step 3 전환 시 주의
+- Step 2: `JwtAuthenticationFilter`가 carelog-be에서 JWT 직접 검증
+- Step 3: SCG가 검증 인수 → carelog-be의 `JwtAuthenticationFilter` **제거**
+- carelog-be `SecurityConfig`도 헤더 기반 유저 정보 추출 방식으로 변경 필요
+- Cloudflare Tunnel → SCG만 외부 노출 구조로 carelog-be 네트워크 격리 자연스럽게 해결
+
+---
+
+### Step 2: `feat/security-jwt` (carelog-be)
 
 | 항목 | 상태 |
 |------|------|
-| Spring Security FilterChain 설정 | 대기 |
-| JWT 발급 (Access Token + Refresh Token) | 대기 |
-| JWT 필터 구현 | 대기 |
-| `organizationId`, `publicId` 클레임 포함 | 대기 |
-| Login 엔드포인트 | 대기 |
+| Spring Security FilterChain 설정 | 완료 |
+| JWT 발급 (Access Token + Refresh Token) | 완료 |
+| JWT 필터 구현 | 완료 |
+| `organizationId`, `publicId` 클레임 포함 | 완료 |
+| Login 엔드포인트 | 완료 |
+| ThreadLocal 기반 TenantContext + TenantFilter | 완료 |
+| AOP 기반 TenantAspect (Hibernate Filter 활성화) | 완료 |
+
+> ⚠️ **미수정 버그 (머지 전 처리 필요)**
+> - `SecurityConfig.java:86` — `new TenantFilter(entityManagerFactory)` 빌드 에러. `new TenantFilter()`로 수정 + `EntityManagerFactory` 필드 제거 필요
+> - `User.java:73` — MANAGER 생성 시 `name == null` 체크 누락
+> - `User.java:75` — 잘못된 예외 타입 (`INVALID_USER_ROLE` → `INVALID_MANAGER_FIELDS`)
+
+#### 트러블슈팅 기록
+
+**[1] Hibernate Filter 테넌트 격리 미동작**
+- 원인: `TenantFilter`에서 `EntityManager.unwrap(Session.class)`로 직접 필터 활성화 시도 → Filter 레이어의 Session-A ≠ `@Transactional` 레이어의 Session-B (JPA Session은 트랜잭션 단위로 생성)
+- 해결: Filter에서는 `TenantContext`(ThreadLocal)에 `organizationId`만 저장, `TenantAspect`가 `@Before`로 트랜잭션 진입 시점에 현재 Session에 필터 활성화
+- 핵심: Servlet Filter와 Spring `@Transactional`은 생명주기가 달라 같은 Session을 공유하지 않음. 요청 전반에 걸친 값 공유는 ThreadLocal, 실제 DB 격리 활성화는 AOP `@Before`에서 처리
+
+**[2] JwtAuthenticationFilter 기동 시 NPE**
+- 원인: `@Component` + `OncePerRequestFilter` 조합 → CGLIB이 `final` 메서드(`doFilter`) 프록시 생성 실패 → `@Slf4j`의 `log` 필드 null → `log.isDebugEnabled()` NPE. 이후 `@Bean` 등록 시도 시 순환 참조 발생
+- 해결: `@Component` 제거 + `SecurityConfig`에서 `new JwtAuthenticationFilter(...)` 직접 생성
+- 핵심: `OncePerRequestFilter` 구현체는 `@Component` 금지. Security Filter는 `SecurityConfig`에서 직접 생성해 등록하는 것이 실무 표준
 
 ### Step 3: `carelog-gateway` 신규 프로젝트 생성
 
@@ -117,7 +220,7 @@ BaseEntity (Audit 필드만: createdAt, updatedAt, createdBy, updatedBy)
 | Spring Cloud Gateway 프로젝트 생성 | 대기 |
 | 라우팅 설정 (`/api/**` → carelog-be, `/rag/**` → FastAPI) | 대기 |
 | JWT 검증 Global Filter | 대기 |
-| Redis 연동 (Refresh Token 저장, Token Blacklist) | 대기 |
+| Redis 연동 (Access Token Blacklist) | 대기 |
 | CORS 설정 | 대기 |
 
 ### Step 4: FastAPI 연동

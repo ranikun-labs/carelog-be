@@ -8,7 +8,6 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.Check;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 
@@ -71,8 +70,8 @@ public class User extends TenantBaseEntity {
          */
         if (role == UserRole.MANAGER) {
             if (managerType == null || userId == null
-            || email == null || password == null) {
-                throw new CustomException(ExceptionStatus.INVALID_USER_ROLE);
+            || email == null || password == null|| name == null) {
+                throw new CustomException(ExceptionStatus.INVALID_MANAGER_FIELDS);
             }
         }
         this.publicId = UUID.randomUUID();
