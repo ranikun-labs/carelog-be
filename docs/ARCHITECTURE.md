@@ -115,3 +115,76 @@ V1/MVP의 빠른 개발과 V2로의 유연한 확장을 모두 고려하여 다�
 - **도메인 간 독립성:** V2에서 '미용'이나 '법률 상담' 같은 새로운 서비스가 추가되더라도, `beauty_logs`, `legal_consulting_logs` 등 신규 테이블만 추가하면 됩니다. 기존 `therapy_logs` 테이블이나 로직에 전혀 영향을 주지 않아 안전하고 독립적인 확장이 가능합니다.
 
 ---
+
+### 6. 인증/인가 아키텍처 — SCG 기반 MSA
+
+#### 6.1. 전체 요청 흐름
+
+```
+클라이언트
+    ↓ HTTPS
+Cloudflare Tunnel
+    ↓
+Spring Cloud Gateway (외부 유일 노출)
+    ├── JWT 서명 검증 (stateless, DB 조회 없음)
+    ├── Redis Blacklist 체크 (로그아웃된 토큰 차단)
+    └── X-User-Id, X-Organization-Id, X-Role, X-Public-Id 헤더 추가
+    ↓ 내부망
+carelog-be (외부 직접 접근 불가)
+    ├── 헤더에서 유저 정보 추출 (토큰 재검증 없음)
+    ├── Hibernate Filter 활성화 → WHERE organization_id = ?
+    └── 비즈니스 로직 처리
+```
+
+#### 6.2. 저장소 역할 분리
+
+| 저장소 | 데이터 | 이유 |
+|--------|--------|------|
+| 클라이언트 | Access Token + Refresh Token | - |
+| Redis | Blacklist된 Access Token | TTL = 남은 유효기간, 만료 시 자동 삭제 |
+| RDB (PostgreSQL) | Refresh Token | 상태 관리 필요 (Rotation, 강제 만료, 재사용 감지) |
+
+#### 6.3. Access Token 클레임 설계
+
+```json
+{
+  "sub": "userId",
+  "organizationId": "uuid",
+  "role": "MANAGER",
+  "publicId": "uuid",
+  "iat": 1234567890,
+  "exp": 1234569690
+}
+```
+- `organizationId`: Hibernate Filter 활성화에 사용 (멀티테넌시 격리)
+- `publicId`: FastAPI RAG 서버 연동 시 내부 PK 은닉용
+- TTL: Access Token 30분 / Refresh Token 14일
+
+#### 6.4. 토큰 생명주기
+
+**로그인**
+1. ID/PW 검증
+2. Access Token + Refresh Token 발급
+3. Refresh Token → RDB 저장
+4. 클라이언트에 반환
+
+**토큰 갱신**
+1. Refresh Token 검증 (RDB 조회)
+2. 새 Access Token 발급
+3. Refresh Token Rotation (기존 삭제 + 새거 저장)
+
+**로그아웃**
+1. Access Token → Redis Blacklist 추가 (TTL = 남은 유효기간)
+2. RDB Refresh Token 삭제
+
+#### 6.5. MVP → SCG 전환 전략
+
+**MVP (Step 2)**: SCG 없이 carelog-be가 직접 JWT 검증
+- `JwtAuthenticationFilter`가 토큰 파싱 → `SecurityContext` 세팅
+
+**SCG 도입 후 (Step 3)**: carelog-be의 JWT 검증 제거
+- `JwtAuthenticationFilter` 삭제
+- `SecurityConfig`를 헤더 기반 유저 정보 추출 방식으로 교체
+- carelog-be는 이미 인증된 요청만 받으므로 비즈니스 로직에만 집중
+
+> SCG 도입 효과: 서비스가 늘어나도 인증은 SCG 한 곳에서만 관리. carelog-be, FastAPI 등 하위 서비스는 인증 코드 불필요.
