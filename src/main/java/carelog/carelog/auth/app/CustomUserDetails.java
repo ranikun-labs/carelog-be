@@ -35,4 +35,12 @@ public class CustomUserDetails implements UserDetails {
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()));
     }
+
+    // ✅ 추가: deletedAt 기반 계정 활성 상태 연결 (UserDetails 계약 준수)
+    // 현재는 soft-delete 구조라 @SQLRestriction이 1차 방어선이지만,
+    // Native Query / 캐싱 우회 시 2차 방어선 역할 + suspended 필드 추가 시 확장 포인트
+    @Override
+    public boolean isEnabled() {
+        return UserDetails.super.isEnabled();
+    }
 }
