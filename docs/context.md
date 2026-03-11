@@ -1,6 +1,6 @@
 # 현재 작업 컨텍스트
 
-> 최종 업데이트: 2026-03-10
+> 최종 업데이트: 2026-03-11
 
 ---
 
@@ -26,6 +26,8 @@
 - [x] BaseEntity에서 deletedAt 제거 → User, Relation 개별 선언으로 이동
 - [x] Relation에 @Version 추가 (낙관적 락)
 - [x] 로컬 개발용 Docker PostgreSQL 환경 구성
+- [x] JWT 인증 체계 구축 (Access/Refresh Token, 로그인·로그아웃·재발급)
+- [x] ThreadLocal + AOP 기반 멀티테넌트 자동 격리 (TenantContext, TenantFilter, TenantAspect)
 
 ---
 
@@ -183,15 +185,32 @@ TTL: 30분
 
 ### Step 2: `feat/security-jwt` (carelog-be)
 
-> ⚠️ Hibernate 테넌트 필터(`organizationFilter`)는 현재 선언만 된 상태. JWT 구현 후 Security Filter에서 `session.enableFilter("organizationFilter").setParameter("organizationId", ...)` 활성화해야 실제 테넌트 격리가 동작함.
-
 | 항목 | 상태 |
 |------|------|
-| Spring Security FilterChain 설정 | 대기 |
-| JWT 발급 (Access Token + Refresh Token) | 대기 |
-| JWT 필터 구현 | 대기 |
-| `organizationId`, `publicId` 클레임 포함 | 대기 |
-| Login 엔드포인트 | 대기 |
+| Spring Security FilterChain 설정 | 완료 |
+| JWT 발급 (Access Token + Refresh Token) | 완료 |
+| JWT 필터 구현 | 완료 |
+| `organizationId`, `publicId` 클레임 포함 | 완료 |
+| Login 엔드포인트 | 완료 |
+| ThreadLocal 기반 TenantContext + TenantFilter | 완료 |
+| AOP 기반 TenantAspect (Hibernate Filter 활성화) | 완료 |
+
+> ⚠️ **미수정 버그 (머지 전 처리 필요)**
+> - `SecurityConfig.java:86` — `new TenantFilter(entityManagerFactory)` 빌드 에러. `new TenantFilter()`로 수정 + `EntityManagerFactory` 필드 제거 필요
+> - `User.java:73` — MANAGER 생성 시 `name == null` 체크 누락
+> - `User.java:75` — 잘못된 예외 타입 (`INVALID_USER_ROLE` → `INVALID_MANAGER_FIELDS`)
+
+#### 트러블슈팅 기록
+
+**[1] Hibernate Filter 테넌트 격리 미동작**
+- 원인: `TenantFilter`에서 `EntityManager.unwrap(Session.class)`로 직접 필터 활성화 시도 → Filter 레이어의 Session-A ≠ `@Transactional` 레이어의 Session-B (JPA Session은 트랜잭션 단위로 생성)
+- 해결: Filter에서는 `TenantContext`(ThreadLocal)에 `organizationId`만 저장, `TenantAspect`가 `@Before`로 트랜잭션 진입 시점에 현재 Session에 필터 활성화
+- 핵심: Servlet Filter와 Spring `@Transactional`은 생명주기가 달라 같은 Session을 공유하지 않음. 요청 전반에 걸친 값 공유는 ThreadLocal, 실제 DB 격리 활성화는 AOP `@Before`에서 처리
+
+**[2] JwtAuthenticationFilter 기동 시 NPE**
+- 원인: `@Component` + `OncePerRequestFilter` 조합 → CGLIB이 `final` 메서드(`doFilter`) 프록시 생성 실패 → `@Slf4j`의 `log` 필드 null → `log.isDebugEnabled()` NPE. 이후 `@Bean` 등록 시도 시 순환 참조 발생
+- 해결: `@Component` 제거 + `SecurityConfig`에서 `new JwtAuthenticationFilter(...)` 직접 생성
+- 핵심: `OncePerRequestFilter` 구현체는 `@Component` 금지. Security Filter는 `SecurityConfig`에서 직접 생성해 등록하는 것이 실무 표준
 
 ### Step 3: `carelog-gateway` 신규 프로젝트 생성
 
