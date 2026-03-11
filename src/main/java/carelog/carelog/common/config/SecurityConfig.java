@@ -4,6 +4,7 @@ import carelog.carelog.auth.app.JwtTokenProvider;
 import carelog.carelog.auth.web.JwtAccessDeniedHandler;
 import carelog.carelog.auth.web.JwtAuthenticationEntryPoint;
 import carelog.carelog.auth.web.JwtAuthenticationFilter;
+import jakarta.persistence.EntityManagerFactory;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -30,6 +31,8 @@ public class SecurityConfig {
     private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
     private final JwtTokenProvider jwtTokenProvider;
     private final UserDetailsService userDetailsService;
+    private final EntityManagerFactory entityManagerFactory;
+
 
     private static final String[] PUBLIC_URLS = {
             "/auth/login",
@@ -79,7 +82,8 @@ public class SecurityConfig {
                 .addFilterBefore(
                         new JwtAuthenticationFilter(jwtTokenProvider, userDetailsService),
                         UsernamePasswordAuthenticationFilter.class
-                );
+                )
+                .addFilterAfter(new TenantFilter(entityManagerFactory), JwtAuthenticationFilter.class);
 
         return http.build();
     }
