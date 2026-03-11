@@ -11,7 +11,6 @@ import java.util.UUID;
 @Getter
 @Builder
 public class UserResponse {
-    private Long id;
     private UUID publicId;
     private String userId; // userId 필드 추가
     private String email;
@@ -23,7 +22,6 @@ public class UserResponse {
 
     public static UserResponse from(User user) {
         return UserResponse.builder()
-                .id(user.getId())
                 .publicId(user.getPublicId())
                 .userId(user.getUserId())
                 .email(user.getEmail())
