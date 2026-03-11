@@ -100,7 +100,7 @@ public class LoggingAspect {
     /**
      * 예외 발생 로깅
      */
-    @AfterThrowing(pointcut = "execution(* carelog.carelog..*(..))", throwing = "ex")
+    @AfterThrowing(pointcut = "execution(* carelog.carelog..*(..)) && !within(*..*Filter)", throwing = "ex")
     public void logException(JoinPoint joinPoint, Exception ex) {
         String className = getSimpleClassName(joinPoint);
         String methodName = joinPoint.getSignature().getName();
