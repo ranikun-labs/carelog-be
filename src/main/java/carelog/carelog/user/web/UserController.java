@@ -34,7 +34,7 @@ public class UserController {
 
     @GetMapping("/customers")
     public ResponseEntity<ApiResponse<List<UserResponse>>> findAllCustomers (
-            @RequestBody(required = false) String name
+            @RequestParam(required = false) String name
     ) {
         List<UserResponse> responses = userService.findAllCustomers(name);
         return ApiResponse.ok(responses);
