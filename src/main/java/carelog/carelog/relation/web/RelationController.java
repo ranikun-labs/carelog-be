@@ -2,11 +2,11 @@ package carelog.carelog.relation.web;
 
 import carelog.carelog.common.web.dto.response.*;
 import carelog.carelog.relation.app.*;
-import carelog.carelog.relation.domain.RelationStatus;
 import carelog.carelog.relation.web.dto.*;
 import jakarta.validation.*;
 import lombok.*;
 import org.springframework.http.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
@@ -20,6 +20,7 @@ public class RelationController {
 
     // 관계 생성 (managerId는 JWT에서 추출)
     @PostMapping
+    @PreAuthorize("hasRole('MANAGER')")
     public ResponseEntity<ApiResponse<RelationResponse>> createRelation(
             @Valid @RequestBody RelationCreateRequest request
     ) {
@@ -64,6 +65,7 @@ public class RelationController {
 
     // 관계 상태 업데이트
     @PatchMapping("/{relationPublicId}/status")
+    @PreAuthorize("hasRole('MANAGER')")
     public ResponseEntity<ApiResponse<RelationResponse>> updateRelationStatus(
             @PathVariable UUID relationPublicId,
             @Valid @RequestBody RelationStatusUpdateRequest request
@@ -74,6 +76,7 @@ public class RelationController {
 
     // 관계 삭제
     @DeleteMapping("/{relationPublicId}")
+    @PreAuthorize("hasRole('MANAGER')")
     public ResponseEntity<Void> deleteRelation(
             @PathVariable UUID relationPublicId
     ) {
