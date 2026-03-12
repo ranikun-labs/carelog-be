@@ -13,6 +13,7 @@ import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 @Entity
 @SQLDelete(sql = "UPDATE relations SET deleted_at = NOW() WHERE id = ?")
@@ -26,6 +27,9 @@ public class Relation extends TenantBaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id", updatable = false, nullable = false)
     private Long id;
+
+    @Column(name = "public_id", unique = true, nullable = false, updatable = false)
+    private UUID publicId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "manager_id", referencedColumnName = "id", nullable = false)
@@ -42,6 +46,7 @@ public class Relation extends TenantBaseEntity {
     private OffsetDateTime deletedAt;
 
     private Relation(User manager, User customer, RelationStatus status) {
+        this.publicId = UUID.randomUUID();
         this.manager = manager;
         this.customer = customer;
         this.status = status;

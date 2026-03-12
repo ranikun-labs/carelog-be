@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.*;
 
 import java.util.*;
+import java.util.UUID;
 
 @Repository
 public interface RelationRepository extends JpaRepository<Relation, Long> {
@@ -16,6 +17,8 @@ public interface RelationRepository extends JpaRepository<Relation, Long> {
     List<Relation> findAllByManager(User manager);
 
     List<Relation> findAllByCustomer(User customer);
+
+    Optional<Relation> findByPublicId(UUID publicId);
 
     boolean existsByManagerAndCustomer(User manager, User customer);
 

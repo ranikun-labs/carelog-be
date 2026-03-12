@@ -1,6 +1,6 @@
 # 현재 작업 컨텍스트
 
-> 최종 업데이트: 2026-03-11
+> 최종 업데이트: 2026-03-12
 
 ---
 
@@ -29,6 +29,9 @@
 - [x] 로컬 개발용 Docker PostgreSQL 환경 구성
 - [x] JWT 인증 체계 구축 (Access/Refresh Token, 로그인·로그아웃·재발급)
 - [x] ThreadLocal + AOP 기반 멀티테넌트 자동 격리 (TenantContext, TenantFilter, TenantAspect)
+- [x] Relation JWT 연동 (managerId JWT 추출, organizationId 세팅)
+- [x] Relation publicId 도입 — 요청/응답 전체 내부 DB pk 제거, UUID 기반으로 전환
+- [x] CustomUserDetails isEnabled() deletedAt 기반 계정 상태 연결
 
 ---
 
@@ -115,9 +118,9 @@ FOREIGN KEY (organization_id) REFERENCES organizations(public_id);
 
 ---
 
-## 📋 다음 작업 순서
+## 📋 작업 이력 및 다음 작업 순서
 
-### Step 1: `feat/tenant-base` 마무리
+### Step 1: `feat/tenant-base` ✅ 완료
 
 | 항목 | 상태 |
 |------|------|
@@ -184,7 +187,7 @@ TTL: 30분
 
 ---
 
-### Step 2: `feat/security-jwt` (carelog-be)
+### Step 2: `feat/security-jwt` ✅ 완료
 
 | 항목 | 상태 |
 |------|------|
@@ -196,10 +199,10 @@ TTL: 30분
 | ThreadLocal 기반 TenantContext + TenantFilter | 완료 |
 | AOP 기반 TenantAspect (Hibernate Filter 활성화) | 완료 |
 
-> ⚠️ **미수정 버그 (머지 전 처리 필요)**
-> - `SecurityConfig.java:86` — `new TenantFilter(entityManagerFactory)` 빌드 에러. `new TenantFilter()`로 수정 + `EntityManagerFactory` 필드 제거 필요
-> - `User.java:73` — MANAGER 생성 시 `name == null` 체크 누락
-> - `User.java:75` — 잘못된 예외 타입 (`INVALID_USER_ROLE` → `INVALID_MANAGER_FIELDS`)
+> ✅ 버그 수정 완료
+> - `SecurityConfig` — `new TenantFilter()` 수정
+> - `User.java` — `name == null` 체크 추가, 예외 타입 `INVALID_MANAGER_FIELDS`로 수정
+> - `CustomUserDetails.isEnabled()` — `deletedAt` 기반 계정 상태 연결
 
 #### 트러블슈팅 기록
 
@@ -213,7 +216,19 @@ TTL: 30분
 - 해결: `@Component` 제거 + `SecurityConfig`에서 `new JwtAuthenticationFilter(...)` 직접 생성
 - 핵심: `OncePerRequestFilter` 구현체는 `@Component` 금지. Security Filter는 `SecurityConfig`에서 직접 생성해 등록하는 것이 실무 표준
 
-### Step 3: `carelog-gateway` 신규 프로젝트 생성
+### Step 2.5: `feat/relation` JWT 연동 및 publicId 전환 ✅ 완료
+
+| 항목 | 상태 |
+|------|------|
+| Relation 엔티티 publicId 추가 | 완료 |
+| 요청/응답 전체 publicId 기반 전환 | 완료 |
+| managerId JWT SecurityContext에서 추출 | 완료 |
+| organizationId 세팅 (테넌트 격리) | 완료 |
+| customerPublicId로 고객 조회 | 완료 |
+
+> ⚠️ User 엔드포인트도 publicId 기반으로 전환 필요 — Journal 이후 처리
+
+### Step 3: `carelog-gateway` 신규 프로젝트 생성 🔜 대기
 
 | 항목 | 상태 |
 |------|------|
@@ -223,14 +238,14 @@ TTL: 30분
 | Redis 연동 (Access Token Blacklist) | 대기 |
 | CORS 설정 | 대기 |
 
-### Step 4: FastAPI 연동
+### Step 4: FastAPI 연동 🔜 대기
 
 | 항목 | 상태 |
 |------|------|
 | `/rag/**` 라우팅 + JWT 전달 | 대기 |
 | FastAPI JWT 검증 연동 | 대기 |
 
-### Step 5: `feat/journal` (carelog-be)
+### Step 5: `feat/journal` (carelog-be) 🔜 대기
 
 | 항목 | 상태 |
 |------|------|

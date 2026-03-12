@@ -7,17 +7,17 @@ import java.util.*;
 
 public interface RelationService {
 
-    RelationResponse createRelation(Long managerId, Long customerId);
+    RelationResponse createRelation(UUID customerPublicId);
 
-    RelationResponse findRelationById(Long relationId);
+    RelationResponse findRelationByPublicId(UUID relationPublicId);
 
-    RelationResponse findRelationByManagerAndCustomer(Long managerId, Long customerId);
+    RelationResponse findRelationByManagerAndCustomer(UUID managerPublicId, UUID customerPublicId);
 
-    List<RelationResponse> findAllRelationsByManager(Long managerId);
+    List<RelationResponse> findAllRelationsByManager();
 
-    List<RelationResponse> findAllRelationsByCustomer(Long customerId);
+    List<RelationResponse> findAllRelationsByCustomer(UUID customerPublicId);
 
-    RelationResponse updateRelationsStatus(Long relationId, RelationStatus newStatus);
+    RelationResponse updateRelationsStatus(UUID relationPublicId, RelationStatus newStatus);
 
-    void deleteRelation(Long relationId);
+    void deleteRelation(UUID relationPublicId);
 }
