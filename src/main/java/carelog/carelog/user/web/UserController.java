@@ -11,6 +11,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/users")
 @RequiredArgsConstructor
@@ -28,6 +30,14 @@ public class UserController {
     public ResponseEntity<ApiResponse<UserResponse>> createCustomer(@Valid @RequestBody CustomerCreateRequest request) {
         UserResponse response = userService.createCustomer(request);
         return ApiResponse.created(response);
+    }
+
+    @GetMapping("/customers")
+    public ResponseEntity<ApiResponse<List<UserResponse>>> findAllCustomers (
+            @RequestBody(required = false) String name
+    ) {
+        List<UserResponse> responses = userService.findAllCustomers(name);
+        return ApiResponse.ok(responses);
     }
 
     @GetMapping("/user-id/{userId}")

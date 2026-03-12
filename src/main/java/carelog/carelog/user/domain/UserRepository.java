@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -20,4 +21,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByUserId(String userId);
 
     boolean existsByUserId(String userId);
+
+    // --- Step B: Customer 조회 ---
+    List<User> findAllByRole(UserRole role);
+
+    List<User> findAllByRoleAndNameContaining(UserRole role, String name);
 }
