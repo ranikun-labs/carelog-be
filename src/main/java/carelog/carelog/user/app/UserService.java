@@ -5,6 +5,8 @@ import carelog.carelog.user.web.dto.ManagerCreateRequest;
 import carelog.carelog.user.web.dto.UserResponse;
 import carelog.carelog.user.web.dto.UserUpdateRequest;
 
+import java.util.List;
+
 public interface UserService {
     UserResponse createManager(ManagerCreateRequest request);
     UserResponse createCustomer(CustomerCreateRequest request);
@@ -14,4 +16,6 @@ public interface UserService {
     UserResponse updateUser(Long id, UserUpdateRequest request);
     void deleteUser(Long id);
 
+    // ----- Customer 조회 -----
+    List<UserResponse> findAllCustomers(String name);
 }

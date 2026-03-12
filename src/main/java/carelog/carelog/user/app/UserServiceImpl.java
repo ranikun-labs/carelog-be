@@ -10,6 +10,7 @@ import org.springframework.security.crypto.password.*;
 import org.springframework.stereotype.*;
 import org.springframework.transaction.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -114,5 +115,17 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
         userRepository.delete(user);
+    }
+
+    @Override
+    public List<UserResponse> findAllCustomers(String name) {
+        List<User> customers = (name != null && !name.isBlank() ) ?
+                userRepository.findAllByRoleAndNameContaining(UserRole.CUSTOMER, name)
+                : userRepository.findAllByRole(UserRole.CUSTOMER);
+
+        return customers.stream()
+                .map(UserResponse::from)
+                .toList();
+
     }
 }

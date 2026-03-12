@@ -60,6 +60,12 @@ BaseEntity (Audit 필드만: createdAt, updatedAt, createdBy, updatedBy)
 - 인증이 필요한 기능이므로 처음부터 User 테이블에서 관리
 - 확장 플로우: 초대 링크로 고객이 직접 `email`, `password` 세팅 → 로그인 가능
 
+#### Customer 조회 전략
+- **현재 (v1)**: Customer는 JWT 로그인 없음 → `publicId` 기반 조회 불가
+- **조회 방법**: `name` 기반 API (`GET /users/customers?name=...`)로 처리
+- ⚠️ **TODO**: Customer name 검색 API 미구현 — Journal 이후 또는 Customer 관련 기능 개발 시 추가 필요
+- **v3 전환 시**: 로그인 추가되면 서비스 레이어의 customer 소유권 체크 코드가 자동으로 활성화됨 (별도 수정 불필요)
+
 ### 식별자 전략
 | 필드 | 용도 |
 |------|------|
@@ -225,8 +231,10 @@ TTL: 30분
 | managerId JWT SecurityContext에서 추출 | 완료 |
 | organizationId 세팅 (테넌트 격리) | 완료 |
 | customerPublicId로 고객 조회 | 완료 |
+| Relation API 접근 제어 (IDOR 방지, 소유권 체크, @PreAuthorize 역할 체크) | 완료 |
 
 > ⚠️ User 엔드포인트도 publicId 기반으로 전환 필요 — Journal 이후 처리
+> ✅ Customer name 검색 API 구현 완료 — `GET /users/customers?name=...`
 
 ### Step 3: `carelog-gateway` 신규 프로젝트 생성 🔜 대기
 
