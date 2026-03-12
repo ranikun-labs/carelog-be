@@ -234,7 +234,7 @@ TTL: 30분
 | Relation API 접근 제어 (IDOR 방지, 소유권 체크, @PreAuthorize 역할 체크) | 완료 |
 
 > ⚠️ User 엔드포인트도 publicId 기반으로 전환 필요 — Journal 이후 처리
-> ⚠️ Customer name 검색 API 미구현 — Customer는 JWT 로그인 없으므로 `GET /users/customers?name=...` 형태로 조회 필요. Journal 이후 추가 예정
+> ✅ Customer name 검색 API 구현 완료 — `GET /users/customers?name=...`
 
 ### Step 3: `carelog-gateway` 신규 프로젝트 생성 🔜 대기
 
