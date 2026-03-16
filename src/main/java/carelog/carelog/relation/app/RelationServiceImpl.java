@@ -6,7 +6,6 @@ import carelog.carelog.relation.domain.*;
 import carelog.carelog.relation.web.dto.*;
 import carelog.carelog.user.domain.*;
 import lombok.*;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.*;
 import org.springframework.transaction.annotation.*;
 
@@ -25,52 +24,48 @@ public class RelationServiceImpl implements RelationService {
                 .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
     }
 
-    private CustomUserDetails getCurrentUserDetails() {
-        return (CustomUserDetails) SecurityContextHolder
-                .getContext().getAuthentication().getPrincipal();
-    }
-
     @Override
     @Transactional
-    public RelationResponse createRelation(UUID customerPublicId) {
-        CustomUserDetails userDetails = getCurrentUserDetails();
+    public RelationResponse createRelation(UUID customerPublicId, CustomUserDetails userDetails) {
         User manager = userRepository.findByUserId(userDetails.getUsername())
                 .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
         User customer = userRepository.findByPublicId(customerPublicId)
                 .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
 
-        if (manager.getRole() != UserRole.MANAGER || customer.getRole() != UserRole.CUSTOMER)
-        { throw new CustomException(ExceptionStatus.INVALID_USER_ROLE); }
+        if (manager.getRole() != UserRole.MANAGER || customer.getRole() != UserRole.CUSTOMER) {
+            throw new CustomException(ExceptionStatus.INVALID_USER_ROLE);
+        }
 
         relationRepository.findByManagerAndCustomerForUpdate(manager, customer)
-                .ifPresent(r ->
-                { throw new CustomException(ExceptionStatus.RELATION_ALREADY_EXISTS); });
+                .ifPresent(r -> { throw new CustomException(ExceptionStatus.RELATION_ALREADY_EXISTS); });
 
         Relation relation = Relation.create(manager, customer);
         relation.assignOrganization(userDetails.getOrganizationId());
 
-        return RelationResponse.from(relationRepository.save(relation));
+        RelationResponse response = RelationResponse.from(relationRepository.save(relation));
+        return response;
     }
 
     @Override
-    public RelationResponse findRelationByPublicId(UUID relationPublicId) {
-        UUID currentPublicId = getCurrentUserDetails().getPublicId();
+    public RelationResponse findRelationByPublicId(UUID relationPublicId, CustomUserDetails userDetails) {
         Relation relation = relationRepository.findByPublicId(relationPublicId)
                 .orElseThrow(() -> new CustomException(ExceptionStatus.RELATION_NOT_FOUND));
 
-        if (!currentPublicId.equals(relation.getManager().getPublicId()) &&
-                ! currentPublicId.equals(relation.getCustomer().getPublicId())
-        ) { throw new CustomException(ExceptionStatus.ACCESS_DENIED); }
+        if (!userDetails.getPublicId().equals(relation.getManager().getPublicId()) &&
+                !userDetails.getPublicId().equals(relation.getCustomer().getPublicId())) {
+            throw new CustomException(ExceptionStatus.ACCESS_DENIED);
+        }
 
-        return RelationResponse.from(relation);
+        RelationResponse response = RelationResponse.from(relation);
+        return response;
     }
 
     @Override
-    public RelationResponse findRelationByManagerAndCustomer(UUID managerPublicId, UUID customerPublicId) {
-        UUID currentPublicId = getCurrentUserDetails().getPublicId();
-        if (!currentPublicId.equals(managerPublicId) &&
-                !currentPublicId.equals(customerPublicId)
-        ) { throw new CustomException(ExceptionStatus.ACCESS_DENIED); }
+    public RelationResponse findRelationByManagerAndCustomer(UUID managerPublicId, UUID customerPublicId, CustomUserDetails userDetails) {
+        if (!userDetails.getPublicId().equals(managerPublicId) &&
+                !userDetails.getPublicId().equals(customerPublicId)) {
+            throw new CustomException(ExceptionStatus.ACCESS_DENIED);
+        }
 
         User manager = userRepository.findByPublicId(managerPublicId)
                 .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
@@ -79,58 +74,59 @@ public class RelationServiceImpl implements RelationService {
         Relation relation = relationRepository.findByManagerAndCustomer(manager, customer)
                 .orElseThrow(() -> new CustomException(ExceptionStatus.RELATION_NOT_FOUND));
 
-        return RelationResponse.from(relation);
+        RelationResponse response = RelationResponse.from(relation);
+        return response;
     }
 
     @Override
-    public List<RelationResponse> findAllRelationsByManager() {
-        CustomUserDetails userDetails = getCurrentUserDetails();
+    public List<RelationResponse> findAllRelationsByManager(CustomUserDetails userDetails) {
         User manager = userRepository.findByUserId(userDetails.getUsername())
                 .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
 
-        return relationRepository.findAllByManager(manager).stream()
+        List<RelationResponse> responses = relationRepository.findAllByManager(manager).stream()
                 .map(RelationResponse::from)
                 .toList();
+        return responses;
     }
 
     @Override
-    public List<RelationResponse> findAllRelationsByCustomer(UUID customerPublicId) {
-        UUID currentPublicId = getCurrentUserDetails().getPublicId();
-        if (!currentPublicId.equals(customerPublicId)) {
+    public List<RelationResponse> findAllRelationsByCustomer(UUID customerPublicId, CustomUserDetails userDetails) {
+        if (!userDetails.getPublicId().equals(customerPublicId)) {
             throw new CustomException(ExceptionStatus.ACCESS_DENIED);
         }
 
         User customer = userRepository.findByPublicId(customerPublicId)
                 .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
 
-        return relationRepository.findAllByCustomer(customer).stream()
+        List<RelationResponse> responses = relationRepository.findAllByCustomer(customer).stream()
                 .map(RelationResponse::from)
                 .toList();
+        return responses;
     }
 
     @Override
     @Transactional
-    public RelationResponse updateRelationsStatus(UUID relationPublicId, RelationStatus newStatus) {
-        UUID currentPublicId = getCurrentUserDetails().getPublicId();
+    public RelationResponse updateRelationsStatus(UUID relationPublicId, RelationStatus newStatus, CustomUserDetails userDetails) {
         Relation relation = relationRepository.findByPublicId(relationPublicId)
                 .orElseThrow(() -> new CustomException(ExceptionStatus.RELATION_NOT_FOUND));
 
-        if (!currentPublicId.equals(relation.getManager().getPublicId())) {
+        if (!userDetails.getPublicId().equals(relation.getManager().getPublicId())) {
             throw new CustomException(ExceptionStatus.ACCESS_DENIED);
         }
 
         relation.updateStatus(newStatus);
-        return RelationResponse.from(relation);
+
+        RelationResponse response = RelationResponse.from(relation);
+        return response;
     }
 
     @Override
     @Transactional
-    public void deleteRelation(UUID relationPublicId) {
-        UUID currentPublicId = getCurrentUserDetails().getPublicId();
+    public void deleteRelation(UUID relationPublicId, CustomUserDetails userDetails) {
         Relation relation = relationRepository.findByPublicId(relationPublicId)
                 .orElseThrow(() -> new CustomException(ExceptionStatus.RELATION_NOT_FOUND));
 
-        if (!currentPublicId.equals(relation.getManager().getPublicId())) {
+        if (!userDetails.getPublicId().equals(relation.getManager().getPublicId())) {
             throw new CustomException(ExceptionStatus.ACCESS_DENIED);
         }
 

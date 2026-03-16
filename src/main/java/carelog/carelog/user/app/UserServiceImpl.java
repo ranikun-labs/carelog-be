@@ -5,7 +5,6 @@ import carelog.carelog.common.web.exception.*;
 import carelog.carelog.user.domain.*;
 import carelog.carelog.user.web.dto.*;
 import lombok.*;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.*;
 import org.springframework.stereotype.*;
 import org.springframework.transaction.annotation.*;
@@ -29,22 +28,22 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public UserResponse createManager(ManagerCreateRequest request) {
-        if (userRepository.existsByUserId(request.getUserId())) {
+        if (userRepository.existsByUserId(request.userId())) {
             throw new CustomException(ExceptionStatus.DUPLICATE_USER_ID);
         }
-        if (userRepository.existsByEmail(request.getEmail())) {
+        if (userRepository.existsByEmail(request.email())) {
             throw new CustomException(ExceptionStatus.DUPLICATE_EMAIL);
         }
 
         User newUser = User.builder()
-                .userId(request.getUserId())
-                .password(passwordEncoder.encode(request.getPassword()))
-                .email(request.getEmail())
-                .name(request.getName())
+                .userId(request.userId())
+                .password(passwordEncoder.encode(request.password()))
+                .email(request.email())
+                .name(request.name())
                 .role(UserRole.MANAGER)
-                .managerType(request.getManagerType())
-                .phoneEncrypted(request.getPhoneEncrypted())
-                .addressEncrypted(request.getAddressEncrypted())
+                .managerType(request.managerType())
+                .phoneEncrypted(request.phoneEncrypted())
+                .addressEncrypted(request.addressEncrypted())
                 .build();
 
         newUser.assignOrganization(UUID.randomUUID());
@@ -54,16 +53,11 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
-    public UserResponse createCustomer(CustomerCreateRequest request) {
-
-        CustomUserDetails userDetails = (CustomUserDetails) SecurityContextHolder
-                .getContext().getAuthentication().getPrincipal();
-
+    public UserResponse createCustomer(CustomerCreateRequest request, CustomUserDetails userDetails) {
         User newUser = User.builder()
-                .name(request.getName())
+                .name(request.name())
                 .role(UserRole.CUSTOMER)
                 .build();
-
 
         newUser.assignOrganization(userDetails.getOrganizationId());
         User savedUser = userRepository.save(newUser);
@@ -96,14 +90,14 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
 
-        if (request.getPassword() != null && !request.getPassword().isBlank()) {
-            user.updatePassword(passwordEncoder.encode(request.getPassword()));
+        if (request.password() != null && !request.password().isBlank()) {
+            user.updatePassword(passwordEncoder.encode(request.password()));
         }
-        if (request.getPhoneEncrypted() != null) {
-            user.updatePhoneEncrypted(request.getPhoneEncrypted());
+        if (request.phoneEncrypted() != null) {
+            user.updatePhoneEncrypted(request.phoneEncrypted());
         }
-        if (request.getAddressEncrypted() != null) {
-            user.updateAddressEncrypted(request.getAddressEncrypted());
+        if (request.addressEncrypted() != null) {
+            user.updateAddressEncrypted(request.addressEncrypted());
         }
 
         return UserResponse.from(user);
@@ -119,13 +113,12 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public List<UserResponse> findAllCustomers(String name) {
-        List<User> customers = (name != null && !name.isBlank() ) ?
+        List<User> customers = (name != null && !name.isBlank()) ?
                 userRepository.findAllByRoleAndNameContaining(UserRole.CUSTOMER, name)
                 : userRepository.findAllByRole(UserRole.CUSTOMER);
 
         return customers.stream()
                 .map(UserResponse::from)
                 .toList();
-
     }
 }
