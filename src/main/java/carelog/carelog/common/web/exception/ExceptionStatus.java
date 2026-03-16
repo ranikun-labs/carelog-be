@@ -15,6 +15,8 @@ public enum ExceptionStatus {
         // 404 NOT_FOUND
         USER_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."),
         RELATION_NOT_FOUND(HttpStatus.NOT_FOUND, "관계를 찾을 수 없습니다."),
+        JOURNAL_NOT_FOUND(HttpStatus.NOT_FOUND, "일지를 찾을 수 없습니다."),
+        JOURNAL_TEMPLATE_NOT_FOUND(HttpStatus.NOT_FOUND, "일지 양식을 찾을 수 없습니다."),
 
         // 409 CONFLICT
         DUPLICATE_USER_ID(HttpStatus.CONFLICT, "이미 존재하는 사용자 ID입니다."),
@@ -23,6 +25,7 @@ public enum ExceptionStatus {
 
         // 403 FORBIDDEN
         ACCESS_DENIED(HttpStatus.FORBIDDEN, "접근 권한이 없습니다."),
+        JOURNAL_DELETE_NOT_ALLOWED(HttpStatus.FORBIDDEN, "일지는 삭제할 수 없습니다."),
 
     // Auth
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "아이디 또는 비밀번호가 일치하지 않습니다."),
