@@ -9,6 +9,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Type;
 
+import java.time.LocalDate;
 import java.util.Map;
 import java.util.UUID;
 
@@ -34,9 +35,19 @@ public class RelationJournal extends TenantBaseEntity {
     @JoinColumn(name = "template_id")
     private JournalTemplate template;
 
+    @Column(name = "title", nullable = false)
+    private String title;
+
+    @Column(name = "visit_date", nullable = false)
+    private LocalDate visitDate;
+
     @Type(JsonBinaryType.class)
-    @Column(name = "content", columnDefinition = "jsonb", nullable = false)
-    private Map<String, Object> content;
+    @Column(name = "case_data", columnDefinition = "jsonb", nullable = false)
+    private Map<String, Object> caseData;
+
+    @Type(JsonBinaryType.class)
+    @Column(name = "private_data", columnDefinition = "jsonb")
+    private Map<String, Object> privateData; // 내부 전용 PII — AI 파이프라인 진입 불가
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
@@ -48,12 +59,17 @@ public class RelationJournal extends TenantBaseEntity {
 
     public RelationJournal(
             Relation relation, JournalTemplate template,
-            Map<String, Object> content, Long previousId
+            String title, LocalDate visitDate,
+            Map<String, Object> caseData,  Map<String, Object> privateData,
+            Long previousId
     ) {
         this.publicId = UUID.randomUUID();
         this.relation = relation;
         this.template = template;
-        this.content = content;
+        this.title = title;
+        this.visitDate = visitDate;
+        this.caseData = caseData;
+        this.privateData = privateData;
         this.status = JournalStatus.ACTIVE;
         this.previousId = previousId;
     }
@@ -61,17 +77,22 @@ public class RelationJournal extends TenantBaseEntity {
     // 최초 진료 일지 생성
     public static RelationJournal create(
             Relation relation, JournalTemplate template,
-            Map<String, Object> content
+            String title, LocalDate visitDate,
+            Map<String, Object> caseData, Map<String, Object> privateData
     ) {
-        return new RelationJournal(relation, template, content, null);
+        return new RelationJournal(relation, template, title, visitDate,
+                caseData, privateData, null);
     }
 
     // 기존 일지의 수정본 생성 (이전 버전 id 연결)
     public static RelationJournal createAsRevision(
             Relation relation, JournalTemplate template,
-            Map<String, Object> content, Long previousId
+            String title, LocalDate visitDate,
+            Map<String, Object> caseData, Map<String, Object> privateData,
+            Long previousId
     ) {
-        return new RelationJournal(relation, template, content, previousId);
+        return new RelationJournal(relation, template, title, visitDate,
+                caseData, privateData, previousId);
     }
 
     // 이전 버전을 대체됨 상태로 변경

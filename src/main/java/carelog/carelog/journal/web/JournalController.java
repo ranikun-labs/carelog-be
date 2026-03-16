@@ -30,7 +30,7 @@ public class JournalController {
         return ApiResponse.created(response);
     }
 
-    @PostMapping("/{journalPublicId}")
+    @PutMapping("/{journalPublicId}")
     public ResponseEntity<ApiResponse<JournalResponse>> updateJournal(
             @PathVariable UUID relationPublicId,
             @PathVariable UUID journalPublicId,

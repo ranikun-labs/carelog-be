@@ -138,16 +138,18 @@ organization_id uuid [not null]
 relation_id bigint [ref: > relations.id]
 template_id bigint [ref: > journal_templates.id, null] // 자유 양식 허용
 
-content jsonb [not null] // NoSQL-like 유연한 데이터 저장
+title varchar(255) [not null] // 일지 제목 — 정렬/필터 대상
+visit_date date [not null]   // 방문일 — 정렬/필터 대상
+case_data jsonb [not null]   // 업무 데이터 — AI 파이프라인 전달용 (익명 임상 데이터)
+private_data jsonb           // 개인 식별 정보 (PII) — 내부 전용, AI 파이프라인 진입 불가
 status varchar(20) [not null, default: 'ACTIVE'] // 'ACTIVE', 'SUPERSEDED'
 
 // 이력 추적: 자기 참조 FK (이전 버전의 id)
 previous_id bigint [ref: > relation_journals.id, null]
 
 created_at timestamptz [not null, default: `now()`]
-// updated_at 없음 — 수정 시 새 레코드 INSERT, 기존은 SUPERSEDED로만 변경
+// updated_at, updated_by 없음 — append-only 설계, 수정 시 새 레코드 INSERT
 created_by varchar(255)
-updated_by varchar(255)
 
 Indexes {
 (public_id) [unique, name: 'uk_journal_public_id']
