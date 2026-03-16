@@ -1,6 +1,6 @@
 # 현재 작업 컨텍스트
 
-> 최종 업데이트: 2026-03-12
+> 최종 업데이트: 2026-03-13
 
 ---
 
@@ -42,9 +42,10 @@
 BaseEntity (Audit 필드만: createdAt, updatedAt, createdBy, updatedBy)
 ├── SystemAuditLog
 └── TenantBaseEntity (organizationId 추가)
-    ├── User       (deletedAt 개별 선언)
-    ├── Relation   (deletedAt, @Version 개별 선언)
-    ├── Journal
+    ├── User            (deletedAt 개별 선언)
+    ├── Relation        (deletedAt 개별 선언)
+    ├── JournalTemplate
+    ├── RelationJournal (updatedAt/updatedBy는 항상 createdAt/createdBy와 동일 — append-only)
     └── TenantAuditLog
 ```
 
@@ -114,8 +115,60 @@ FOREIGN KEY (organization_id) REFERENCES organizations(public_id);
 | 패턴 | 적용 대상 |
 |------|----------|
 | SoftDelete (`deletedAt`) | User, Relation |
-| SUPERSEDED 패턴 | Journal |
+| SUPERSEDED 패턴 | Journal (물리 삭제 불가) |
 | append-only (삭제 없음) | TenantAuditLog, SystemAuditLog |
+
+### Journal 이력 관리 전략 (SUPERSEDED + previousId 꼬리물기)
+
+#### 설계 배경
+의료법상 진료 기록 보관 의무(5~10년)로 인해 물리 삭제 불가. 삭제 차단 3계층 적용.
+
+| 계층 | 방법 |
+|------|------|
+| DB 레벨 | 앱 계정 `REVOKE DELETE ON relation_journals` |
+| Repository 레벨 | `delete()` / `deleteById()` override → `CustomException` throw |
+| API 레벨 | 삭제 엔드포인트 미제공 (의도적) |
+
+#### 수정 시 동작 방식
+```
+수정 전:  [A, ACTIVE, previous_id=null]
+
+수정 후:
+  [A, SUPERSEDED, previous_id=null]   ← 기존 레코드 상태만 변경
+  [B, ACTIVE,     previous_id=A.id]   ← 새 레코드 INSERT
+```
+- `previous_id`: 자기 참조 FK (이전 버전의 `id`를 가리킴)
+- 새 레코드는 새 `public_id` 발급 (URL이 바뀌므로 클라이언트는 항상 최신 id로 재조회)
+- 단, 꼬리 추적은 `previous_id` FK를 따라가면 전체 이력 복원 가능
+
+#### 이력 조회 — PostgreSQL Recursive CTE
+```sql
+-- 최신 레코드(id=12)로부터 전체 이력을 한 쿼리로 조회
+WITH RECURSIVE journal_history AS (
+    SELECT * FROM relation_journals WHERE id = 12         -- 시작점
+    UNION ALL
+    SELECT j.*
+    FROM relation_journals j
+    INNER JOIN journal_history jh ON j.id = jh.previous_id -- 꼬리 역추적
+)
+SELECT * FROM journal_history ORDER BY created_at DESC;
+```
+JPA Repository에서 `@Query(nativeQuery = true)`로 동일하게 사용.
+
+#### 인덱스 전략
+```sql
+-- previous_id 역추적 성능 (이력 조회 필수)
+CREATE INDEX idx_journal_previous_id ON relation_journals(previous_id);
+
+-- JSONB 전문 검색 (MVP 이후, 병목 측정 후 적용)
+CREATE INDEX idx_journal_content_gin ON relation_journals USING GIN (content);
+```
+> Flyway 미사용(ddl-auto: update) — GIN 인덱스는 Hibernate 자동 생성 불가. DB 직접 실행 필요.
+
+#### JournalTemplate 설계
+- `fields` 컬럼: JSONB 배열. 양식 필드 스펙 정의.
+- 템플릿 없이도 자유 양식 작성 가능 (`template_id` nullable)
+- 상태: `ACTIVE` / `INACTIVE` (비활성화만, 삭제 없음)
 
 ### 동시성 전략
 | 방식 | 적용 대상 |
@@ -222,6 +275,12 @@ TTL: 30분
 - 해결: `@Component` 제거 + `SecurityConfig`에서 `new JwtAuthenticationFilter(...)` 직접 생성
 - 핵심: `OncePerRequestFilter` 구현체는 `@Component` 금지. Security Filter는 `SecurityConfig`에서 직접 생성해 등록하는 것이 실무 표준
 
+**[3] Recursive CTE + Hibernate 6 @Filter 충돌 (`column "id" does not exist`)**
+- 원인: `RelationJournal`이 `TenantBaseEntity` 상속 → `@Filter(organization_id = :organizationId)` 적용됨. Hibernate 6은 native query 실행 시 `@Filter` 조건을 쿼리에 주입하는데, Recursive CTE 구조에 주입하면서 내부 컬럼 참조가 깨짐 → `column "id" does not exist` 에러
+- 해결: CTE 대신 Java 체인 추적으로 우회. `previousId` FK를 따라 루프로 이력 수집
+- 핵심: Hibernate 6의 `@Filter`는 native query에도 적용됨. CTE처럼 복잡한 SQL 구조에서는 필터 주입이 쿼리를 망가뜨릴 수 있음
+- 향후: Hibernate `Session.disableFilter()` 또는 별도 네이티브 쿼리 실행 방식으로 CTE 전환 예정
+
 ### Step 2.5: `feat/relation` JWT 연동 및 publicId 전환 ✅ 완료
 
 | 항목 | 상태 |
@@ -253,14 +312,76 @@ TTL: 30분
 | `/rag/**` 라우팅 + JWT 전달 | 대기 |
 | FastAPI JWT 검증 연동 | 대기 |
 
-### Step 5: `feat/journal` (carelog-be) 🔜 대기
+### Step 5: `feat/journal` (carelog-be) 🔜 진행 중
 
 | 항목 | 상태 |
 |------|------|
-| JournalTemplate 엔티티 | 대기 |
-| RelationJournal 엔티티 (JSONB) | 대기 |
-| SUPERSEDED 패턴 + delete 차단 3계층 | 대기 |
-| 기본 CRUD | 대기 |
+| ExceptionStatus — JOURNAL_* 3개 추가 | 대기 |
+| JournalTemplate 엔티티 + Repository | 대기 |
+| RelationJournal 엔티티 (JSONB, previousId 꼬리물기) | 대기 |
+| JournalStatus, JournalTemplateStatus enum | 대기 |
+| Repository delete 차단 (2계층) | 대기 |
+| JournalService / JournalTemplateService | 대기 |
+| JournalController (삭제 엔드포인트 없음) | 대기 |
+| JournalTemplateController | 대기 |
+
+> 설계 결정: previousId 자기참조 FK 방식. 이력 조회는 PostgreSQL Recursive CTE. 상세 내용은 위 "Journal 이력 관리 전략" 참고.
+> 조회 권한: MVP에서는 매니저만. Customer JWT 로그인 없으므로 제외.
+
+### 면접 준비 (2026-03-17 화요일)
+
+> 코드 설명 면접. 본인이 작성한 코드 구조와 세부 로직 파악 여부 평가.
+
+**설명 흐름**
+1. 전체 패키지 구조 — user / relation / journal / auth / common 레이어 분리
+2. TenantBaseEntity + Hibernate Filter — 멀티테넌시 자동 격리 원리
+3. JWT 인증 흐름 — Filter → SecurityContext → TenantContext ThreadLocal
+4. Relation 도메인 — Factory method, publicId vs id 식별자 전략
+5. Journal SUPERSEDED 패턴 — 의료법 배경, 삭제 차단 3계층, previousId 이력 추적
+
+**예상 질문**
+- Hibernate Filter가 뭔지, 언제 활성화되는지
+- ThreadLocal을 왜 썼는지, 메모리 누수 방지를 어떻게 하는지
+- Servlet Filter와 @Transactional의 Session 생명주기가 왜 다른지
+- Access Token / Refresh Token 역할 분리 이유, Refresh Token Rotation
+- OncePerRequestFilter에 @Component 왜 안 붙이는지
+- publicId / id 둘 다 두는 이유
+- soft delete vs SUPERSEDED 차이, 언제 어떤 걸 쓰는지
+- Factory method (`Relation.create()`)를 왜 생성자 대신 쓰는지
+- previousId 꼬리물기 vs group_id 트레이드오프
+- Recursive CTE가 뭔지, 언제 쓰는지
+
+**계층 책임 원칙**
+- `SecurityContextHolder` 직접 참조는 Controller 책임 — Service가 Spring Security 인프라에 직접 의존하면 계층 오염 + 테스트 어려움
+- 올바른 방식: Controller에서 `@AuthenticationPrincipal`로 꺼내서 Service에 파라미터로 전달
+- 현재 `RelationServiceImpl`, `JournalServiceImpl` 모두 Service에서 직접 참조 중 → 리팩토링 필요 (MVP 이후)
+- 면접 질문: "왜 Service에서 SecurityContextHolder 쓰나요?" → "인지하고 있고, Controller로 옮기는 게 맞습니다. 범위상 MVP 이후 일괄 리팩토링 예정입니다"
+
+**핵심 어필 포인트**
+- 멀티테넌시 + Hibernate Filter 동작 원리 (트러블슈팅 기록 숙지)
+- SUPERSEDED 패턴 — 의료법 보관 의무 배경
+- TenantBaseEntity 상속 선택 이유 — @FilterDef 중복 vs 유지보수 트레이드오프
+
+**스프링 예상 질문**
+
+거의 확실히 나올 것:
+- Filter랑 Interceptor 차이
+- AOP가 뭔지, 언제 쓰는지
+- `@Transactional` 동작 원리 (프록시)
+- `@Transactional(readOnly = true)` 왜 쓰는지
+
+이 프로젝트 코드 보다가 나올 것:
+- `OncePerRequestFilter` 왜 쓰는지, 일반 Filter랑 차이
+- ThreadLocal 왜 썼는지, 언제 clear 해야 하는지
+- Servlet Filter에서 Session 못 쓰는 이유 (트러블슈팅 기록)
+- `@PreAuthorize` 동작 원리 — AOP 기반이라는 거 알고 있는지
+
+꼬리 질문으로 나올 것:
+- Hibernate Filter랑 `@Where` 차이
+- `FetchType.LAZY` 왜 쓰는지, N+1이 뭔지
+- `@MappedSuperclass` vs `@Inheritance` 차이
+
+---
 
 ### 인프라 구조 (배포)
 ```

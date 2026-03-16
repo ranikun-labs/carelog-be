@@ -102,26 +102,30 @@ Note: '''
 ```
 Table journal_templates {
 id bigint [pk, increment]
-profession_type varchar(30) [not null]
+public_id uuid [unique, not null, default: `gen_random_uuid()`]
+organization_id uuid [not null]
 name varchar(100) [not null]
-version int [not null, default: 1] // 🌟 템플릿 버전 관리
-description text
-schema jsonb [not null] // Form Builder용 JSON 스키마
-is_active boolean [default: true]
+fields jsonb [not null] // 양식 필드 스펙 배열
+// 예: [{"key":"bodyPart","label":"부위","type":"text"}, ...]
+status varchar(20) [not null, default: 'ACTIVE'] // 'ACTIVE', 'INACTIVE'
 
-created_at timestamptz
-updated_at timestamptz
-deleted_at timestamptz
+created_at timestamptz [not null, default: `now()`]
+updated_at timestamptz [not null, default: `now()`]
+created_by varchar(255)
+updated_by varchar(255)
 
 Indexes {
-// [필수] 템플릿 버전별 유일성 보장
-(profession_type, name, version) [unique, name: 'uk_template_version']
+(public_id) [unique, name: 'uk_template_public_id']
+(organization_id) [name: 'idx_template_organization']
+// MVP 이후, 병목 측정 후 적용
+// (fields) [type: gin, name: 'idx_template_fields_gin']
 }
 
 Note: '''
-[템플릿 버전 관리 전략]
-- 템플릿 수정 시 기존 레코드를 수정하지 않고, 새 버전(version++)을 Insert
-- 목적: 과거에 작성된 일지가 템플릿 변경으로 인해 깨지는 현상(Data Corruption) 방지
+[템플릿 설계 전략]
+- 삭제 없음. status = INACTIVE로 비활성화만 허용.
+- 자유 양식 작성 지원: relation_journals.template_id nullable
+- fields JSONB: 양식 필드 스펙 배열 (key, label, type)
   '''
   }
 
@@ -129,34 +133,50 @@ Note: '''
 
 Table relation_journals {
 id bigint [pk, increment]
+public_id uuid [unique, not null, default: `gen_random_uuid()`]
+organization_id uuid [not null]
 relation_id bigint [ref: > relations.id]
-author_id bigint [ref: > users.id]
+template_id bigint [ref: > journal_templates.id, null] // 자유 양식 허용
 
-template_id bigint [ref: > journal_templates.id]
-// 작성 당시의 템플릿 버전 스냅샷 (조인 없이 버전 확인 가능)
-template_version int [not null]
-
-title varchar(200) [not null]
 content jsonb [not null] // NoSQL-like 유연한 데이터 저장
-journal_date date [not null]
+status varchar(20) [not null, default: 'ACTIVE'] // 'ACTIVE', 'SUPERSEDED'
 
-created_at timestamptz
-updated_at timestamptz
-deleted_at timestamptz
+// 이력 추적: 자기 참조 FK (이전 버전의 id)
+previous_id bigint [ref: > relation_journals.id, null]
+
+created_at timestamptz [not null, default: `now()`]
+// updated_at 없음 — 수정 시 새 레코드 INSERT, 기존은 SUPERSEDED로만 변경
+created_by varchar(255)
+updated_by varchar(255)
 
 Indexes {
-// ✅ [Minimum] 조인 성능 방어를 위한 최소한의 인덱스
+(public_id) [unique, name: 'uk_journal_public_id']
 (relation_id) [name: 'idx_journal_relation']
+(organization_id) [name: 'idx_journal_organization']
+(previous_id) [name: 'idx_journal_previous_id'] // 이력 역추적 성능
+// MVP 이후, 병목 측정 후 적용
+// (content) [type: gin, name: 'idx_journal_content_gin']
 }
 
 Note: '''
-[인덱스 전략: Minimum & YAGNI]
-1. 필수(Minimum): `relation_id` 인덱스는 조인 성능 및 JPA N+1 방지를 위해 선제적 적용.
-2. 지양(YAGNI): 정렬/필터링을 위한 복합 인덱스는 초기 단계에서 배제 (Write 오버헤드 최소화).
+[SUPERSEDED 패턴 — 의료법 대응]
+- 물리 삭제 불가. 삭제 차단 3계층:
+  1. DB: 앱 계정 REVOKE DELETE
+  2. Repository: delete() override → CustomException
+  3. API: 삭제 엔드포인트 미제공
 
-[성능 튜닝 로드맵 - Portfolio]
-- 예상 병목: 데이터 적재 후 `ORDER BY journal_date DESC` 조회 시 File Sort 발생
-- 해결 계획: 슬로우 쿼리 포착 시 (relation_id, journal_date DESC) 복합 인덱스로 교체하여 최적화 (Sort 연산 제거)
+[수정 흐름]
+  기존 ACTIVE 레코드 → status = SUPERSEDED
+  새 레코드 INSERT (새 public_id, previous_id = 기존.id)
+
+[이력 조회 — Recursive CTE]
+  WITH RECURSIVE journal_history AS (
+      SELECT * FROM relation_journals WHERE id = :latestId
+      UNION ALL
+      SELECT j.* FROM relation_journals j
+      INNER JOIN journal_history jh ON j.id = jh.previous_id
+  )
+  SELECT * FROM journal_history ORDER BY created_at DESC;
   '''
   }
 ```
