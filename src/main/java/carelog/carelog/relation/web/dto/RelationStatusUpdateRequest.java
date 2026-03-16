@@ -1,13 +1,11 @@
 package carelog.carelog.relation.web.dto;
 
-import carelog.carelog.relation.domain.*;
-import jakarta.validation.constraints.*;
-import lombok.*;
+import carelog.carelog.relation.domain.RelationStatus;
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotNull;
 
-@Getter
-@NoArgsConstructor
-public class RelationStatusUpdateRequest {
-
-    @NotNull(message = "상태는 필수 입력 값입니다.")
-    private RelationStatus status;
-}
+public record RelationStatusUpdateRequest(
+        @Schema(description = "변경할 관계 상태")
+        @NotNull(message = "상태는 필수 입력 값입니다.")
+        RelationStatus status
+) {}
