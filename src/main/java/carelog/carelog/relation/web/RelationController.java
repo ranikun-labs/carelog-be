@@ -1,5 +1,6 @@
 package carelog.carelog.relation.web;
 
+import carelog.carelog.auth.app.CustomUserDetails;
 import carelog.carelog.common.web.dto.response.*;
 import carelog.carelog.relation.app.*;
 import carelog.carelog.relation.web.dto.*;
@@ -7,6 +8,7 @@ import jakarta.validation.*;
 import lombok.*;
 import org.springframework.http.*;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
@@ -18,69 +20,70 @@ public class RelationController {
 
     private final RelationService relationService;
 
-    // 관계 생성 (managerId는 JWT에서 추출)
     @PostMapping
     @PreAuthorize("hasRole('MANAGER')")
     public ResponseEntity<ApiResponse<RelationResponse>> createRelation(
-            @Valid @RequestBody RelationCreateRequest request
+            @Valid @RequestBody RelationCreateRequest request,
+            @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
-        RelationResponse response = relationService.createRelation(request.getCustomerPublicId());
+        RelationResponse response = relationService.createRelation(request.customerPublicId(), userDetails);
         return ApiResponse.created(response);
     }
 
-    // publicId로 관계 단건 조회
     @GetMapping("/{relationPublicId}")
     public ResponseEntity<ApiResponse<RelationResponse>> findRelationByPublicId(
-            @PathVariable UUID relationPublicId
+            @PathVariable UUID relationPublicId,
+            @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
-        RelationResponse response = relationService.findRelationByPublicId(relationPublicId);
+        RelationResponse response = relationService.findRelationByPublicId(relationPublicId, userDetails);
         return ApiResponse.ok(response);
     }
 
-    // 매니저-고객 조합으로 관계 조회
     @GetMapping("/manager/{managerPublicId}/customer/{customerPublicId}")
     public ResponseEntity<ApiResponse<RelationResponse>> findRelationByManagerAndCustomer(
             @PathVariable UUID managerPublicId,
-            @PathVariable UUID customerPublicId
+            @PathVariable UUID customerPublicId,
+            @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
-        RelationResponse response = relationService.findRelationByManagerAndCustomer(managerPublicId, customerPublicId);
+        RelationResponse response = relationService.findRelationByManagerAndCustomer(managerPublicId, customerPublicId, userDetails);
         return ApiResponse.ok(response);
     }
 
-    // JWT 매니저의 모든 관계 조회
     @GetMapping("/manager")
-    public ResponseEntity<ApiResponse<List<RelationResponse>>> findAllRelationByManager() {
-        List<RelationResponse> responses = relationService.findAllRelationsByManager();
+    public ResponseEntity<ApiResponse<List<RelationResponse>>> findAllRelationByManager(
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        List<RelationResponse> responses = relationService.findAllRelationsByManager(userDetails);
         return ApiResponse.ok(responses);
     }
 
-    // 고객의 모든 관계 조회
     @GetMapping("/customer/{customerPublicId}")
     public ResponseEntity<ApiResponse<List<RelationResponse>>> findAllRelationByCustomer(
-            @PathVariable UUID customerPublicId
+            @PathVariable UUID customerPublicId,
+            @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
-        List<RelationResponse> responses = relationService.findAllRelationsByCustomer(customerPublicId);
+        List<RelationResponse> responses = relationService.findAllRelationsByCustomer(customerPublicId, userDetails);
         return ApiResponse.ok(responses);
     }
 
-    // 관계 상태 업데이트
     @PatchMapping("/{relationPublicId}/status")
     @PreAuthorize("hasRole('MANAGER')")
     public ResponseEntity<ApiResponse<RelationResponse>> updateRelationStatus(
             @PathVariable UUID relationPublicId,
-            @Valid @RequestBody RelationStatusUpdateRequest request
+            @Valid @RequestBody RelationStatusUpdateRequest request,
+            @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
-        RelationResponse response = relationService.updateRelationsStatus(relationPublicId, request.getStatus());
+        RelationResponse response = relationService.updateRelationsStatus(relationPublicId, request.status(), userDetails);
         return ApiResponse.ok(response);
     }
 
-    // 관계 삭제
     @DeleteMapping("/{relationPublicId}")
     @PreAuthorize("hasRole('MANAGER')")
     public ResponseEntity<Void> deleteRelation(
-            @PathVariable UUID relationPublicId
+            @PathVariable UUID relationPublicId,
+            @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
-        relationService.deleteRelation(relationPublicId);
+        relationService.deleteRelation(relationPublicId, userDetails);
         return ApiResponse.noContent();
     }
 }

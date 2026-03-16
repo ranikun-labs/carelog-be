@@ -1,5 +1,6 @@
 package carelog.carelog.user.web;
 
+import carelog.carelog.auth.app.CustomUserDetails;
 import carelog.carelog.common.web.dto.response.ApiResponse;
 import carelog.carelog.user.app.UserService;
 import carelog.carelog.user.web.dto.CustomerCreateRequest;
@@ -9,6 +10,7 @@ import carelog.carelog.user.web.dto.UserUpdateRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -27,8 +29,11 @@ public class UserController {
     }
 
     @PostMapping("/customers")
-    public ResponseEntity<ApiResponse<UserResponse>> createCustomer(@Valid @RequestBody CustomerCreateRequest request) {
-        UserResponse response = userService.createCustomer(request);
+    public ResponseEntity<ApiResponse<UserResponse>> createCustomer(
+            @Valid @RequestBody CustomerCreateRequest request,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        UserResponse response = userService.createCustomer(request, userDetails);
         return ApiResponse.created(response);
     }
 
