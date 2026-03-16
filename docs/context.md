@@ -178,8 +178,8 @@ CREATE INDEX idx_journal_content_gin ON relation_journals USING GIN (content);
 |------|------|----------|
 | `title` | varchar | 정렬/필터 대상 + AI 파이프라인 구조적 제외 (UI 메타데이터) |
 | `visit_date` | date | 정렬/필터 대상 (방문일 기준 조회) |
-| `clinical_data` | JSONB | 업종별 동적 임상 데이터 — AI 파이프라인 전달 대상 |
-| `personal_data` | JSONB | PII (이름, 연락처 등) — 내부 전용, AI 전달 제외 |
+| `case_data` | JSONB | 업종별 동적 업무 데이터 — AI 파이프라인 전달 대상 |
+| `private_data` | JSONB | PII (이름, 연락처 등) — 내부 전용, AI 전달 제외 |
 
 **컬럼 분리 기준 (실무 표준)**
 - 정렬 / 필터 / 인덱스 대상 → 고정 컬럼
