@@ -170,6 +170,41 @@ CREATE INDEX idx_journal_content_gin ON relation_journals USING GIN (content);
 - 템플릿 없이도 자유 양식 작성 가능 (`template_id` nullable)
 - 상태: `ACTIVE` / `INACTIVE` (비활성화만, 삭제 없음)
 
+#### RelationJournal 컬럼 분리 설계 (PII 분리 + AI 파이프라인 보안 경계)
+
+**확정 구조**: `content` 단일 JSONB → 4필드 분리
+
+| 컬럼 | 타입 | 분리 근거 |
+|------|------|----------|
+| `title` | varchar | 정렬/필터 대상 + AI 파이프라인 구조적 제외 (UI 메타데이터) |
+| `visit_date` | date | 정렬/필터 대상 (방문일 기준 조회) |
+| `clinical_data` | JSONB | 업종별 동적 임상 데이터 — AI 파이프라인 전달 대상 |
+| `personal_data` | JSONB | PII (이름, 연락처 등) — 내부 전용, AI 전달 제외 |
+
+**컬럼 분리 기준 (실무 표준)**
+- 정렬 / 필터 / 인덱스 대상 → 고정 컬럼
+- 구조가 자주 바뀌거나 업종별로 다른 데이터 → JSONB
+- 보안 경계가 다른 데이터 → 별도 JSONB
+
+**보안 경계 설계 포인트**
+- `clinical_data`만 익명화하여 벡터 DB / AI API 전달
+- `personal_data`는 내부 전용 격리 — AI 파이프라인 진입 불가
+- 백엔드 저장 시점에 템플릿 `category` 정의와 대조하여 재분류 검증 레이어 필수 (프론트 신뢰 불가)
+
+**면접 서사**
+> "단일 JSONB에서 4필드 분리는 AI 보안 경계를 코드 레벨이 아닌 컬럼 레벨로 강제한 설계 판단."
+
+#### 벡터 동기화 전략 (단계별)
+
+| 단계 | 방식 | 핵심 |
+|------|------|------|
+| MVP | `@Async` + `@Retryable` | 트랜잭션 커밋 후 비동기 동기화, 3회 재시도(Exponential Backoff). 서버 재시작 시 이벤트 유실 허용 |
+| V2 | PostgreSQL Outbox + `@Scheduled` 폴러 | 저널 수정 트랜잭션 안에 outbox INSERT 묶음. 상태 머신(PENDING→PROCESSING→COMPLETED/FAILED→DEAD). 이벤트 유실 없음 |
+| V3 (운영) | CDC(Debezium/WAL) + Reconciliation + 알림 | 폴링 지연 제거. RDB↔벡터 DB 정합성 배치 검증. Dead Letter 발생 시 Slack 웹훅 |
+
+**면접 서사**
+> "벡터 동기화는 MVP에서 @Async + @Retryable로 빠르게 검증하고, V2에서 PostgreSQL Outbox로 이벤트 영속성 확보, 운영 단계에서 CDC + Reconciliation으로 전환. 각 단계에서 규모에 맞는 복잡도를 선택."
+
 ### 동시성 전략
 | 방식 | 적용 대상 |
 |------|----------|

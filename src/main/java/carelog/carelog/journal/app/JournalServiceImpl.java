@@ -46,7 +46,11 @@ public class JournalServiceImpl implements JournalService {
                     .orElseThrow(() -> new CustomException(ExceptionStatus.JOURNAL_TEMPLATE_NOT_FOUND));
         }
 
-        RelationJournal journal = RelationJournal.create(relation, template, request.content());
+        RelationJournal journal = RelationJournal.create(
+                relation, template,
+                request.title(), request.visitDate(),
+                request.caseData(), request.privateData()
+        );
         journal.assignOrganization(userDetails.getOrganizationId());
 
         JournalResponse response = JournalResponse.from(journalRepository.save(journal));
@@ -70,7 +74,10 @@ public class JournalServiceImpl implements JournalService {
         existing.supersede();
 
         RelationJournal revision = RelationJournal.createAsRevision(
-                existing.getRelation(), template, request.content(), existing.getId()
+                existing.getRelation(), template,
+                request.title(), request.visitDate(),
+                request.caseData(), request.privateData(),
+                existing.getId()
         );
         revision.assignOrganization(userDetails.getOrganizationId());
 
