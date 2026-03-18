@@ -14,6 +14,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/users")
@@ -57,16 +58,16 @@ public class UserController {
         return ApiResponse.ok(response);
     }
 
-    @PatchMapping("/{id}")
+    @PatchMapping("/{publicId}")
     public ResponseEntity<ApiResponse<UserResponse>> updateUser(
-            @PathVariable Long id, @Valid @RequestBody UserUpdateRequest request) {
-         UserResponse response = userService.updateUser(id, request);
-         return ApiResponse.ok(response);
+            @PathVariable UUID publicId, @Valid @RequestBody UserUpdateRequest request) {
+        UserResponse response = userService.updateUser(publicId, request);
+        return ApiResponse.ok(response);
     }
 
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
-        userService.deleteUser(id);
+    @DeleteMapping("/{publicId}")
+    public ResponseEntity<Void> deleteUser(@PathVariable UUID publicId) {
+        userService.deleteUser(publicId);
         return ApiResponse.noContent();
     }
 

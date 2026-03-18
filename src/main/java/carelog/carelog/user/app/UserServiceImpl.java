@@ -20,8 +20,8 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
-    private User findUserEntityById(Long id) {
-        return userRepository.findById(id)
+    private User findUserEntityByPublicId(UUID publicId) {
+        return userRepository.findByPublicId(publicId)
                 .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
     }
 
@@ -65,12 +65,6 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public UserResponse findUserById(Long id) {
-        User user = findUserEntityById(id);
-        return UserResponse.from(user);
-    }
-
-    @Override
     public UserResponse findUserByUserId(String userId) {
         User user = userRepository.findByUserId(userId)
                 .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
@@ -86,9 +80,8 @@ public class UserServiceImpl implements UserService {
 
     @Transactional
     @Override
-    public UserResponse updateUser(Long id, UserUpdateRequest request) {
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
+    public UserResponse updateUser(UUID publicId, UserUpdateRequest request) {
+        User user = findUserEntityByPublicId(publicId);
 
         if (request.password() != null && !request.password().isBlank()) {
             user.updatePassword(passwordEncoder.encode(request.password()));
@@ -105,9 +98,8 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
-    public void deleteUser(Long id) {
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
+    public void deleteUser(UUID publicId) {
+        User user = findUserEntityByPublicId(publicId);
         userRepository.delete(user);
     }
 

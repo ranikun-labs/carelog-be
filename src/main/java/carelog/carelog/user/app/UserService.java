@@ -7,15 +7,15 @@ import carelog.carelog.user.web.dto.UserResponse;
 import carelog.carelog.user.web.dto.UserUpdateRequest;
 
 import java.util.List;
+import java.util.UUID;
 
 public interface UserService {
     UserResponse createManager(ManagerCreateRequest request);
     UserResponse createCustomer(CustomerCreateRequest request, CustomUserDetails userDetails);
-    UserResponse findUserById(Long id);
     UserResponse findUserByUserId(String userId);
     UserResponse findUserByEmail(String email);
-    UserResponse updateUser(Long id, UserUpdateRequest request);
-    void deleteUser(Long id);
+    UserResponse updateUser(UUID publicId, UserUpdateRequest request);
+    void deleteUser(UUID publicId);
 
     // ----- Customer 조회 -----
     List<UserResponse> findAllCustomers(String name);
