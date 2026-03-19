@@ -1,6 +1,6 @@
 # 현재 작업 컨텍스트
 
-> 최종 업데이트: 2026-03-13
+> 최종 업데이트: 2026-03-19
 
 ---
 
@@ -13,6 +13,8 @@
 | [ERD_v1.md](ERD_v1.md) | 데이터베이스 엔티티 설계 및 관계도 |
 | [DomainArchitecture.md](DomainArchitecture.md) | 도메인 모델링 및 비즈니스 로직 설계 원칙 |
 | [SoftwareEngineeringPrinciples.md](SoftwareEngineeringPrinciples.md) | 개발 원칙 및 코드 스타일 가이드 |
+| [monorepo-strategy.md](monorepo-strategy.md) | Gradle Multi-Module 모노레포 전환 결정 배경 |
+| [scg-auth-design.md](scg-auth-design.md) | Spring Cloud Gateway 인증 설계 (JWT 검증, Blacklist, 라우팅, carelog-be 전환 전략) |
 
 ---
 
@@ -330,15 +332,74 @@ TTL: 30분
 > ⚠️ User 엔드포인트도 publicId 기반으로 전환 필요 — Journal 이후 처리
 > ✅ Customer name 검색 API 구현 완료 — `GET /users/customers?name=...`
 
-### Step 3: `carelog-gateway` 신규 프로젝트 생성 🔜 대기
+### Step 3: `refactor/scg-monorepo` 🔜 진행 예정
 
 | 항목 | 상태 |
 |------|------|
-| Spring Cloud Gateway 프로젝트 생성 | 대기 |
-| 라우팅 설정 (`/api/**` → carelog-be, `/rag/**` → FastAPI) | 대기 |
-| JWT 검증 Global Filter | 대기 |
-| Redis 연동 (Access Token Blacklist) | 대기 |
-| CORS 설정 | 대기 |
+| Gradle Multi-Module 모노레포 전환 (settings.gradle, 루트 build.gradle) | 대기 |
+| carelog-be → `carelog-be/` 서브디렉토리 이동 (git mv) | 대기 |
+| `carelog-gateway` 모듈 신규 생성 | 대기 |
+| SCG JwtGlobalFilter (GlobalFilter + Ordered) | 대기 |
+| SCG RedisBlacklistService (ReactiveStringRedisTemplate) | 대기 |
+| carelog-be: JwtAuthenticationFilter 제거 | 대기 |
+| carelog-be: GatewayHeaderAuthFilter 추가 | 대기 |
+| carelog-be: CustomUserDetails 헤더 기반 생성자 추가 | 대기 |
+| carelog-be: SecurityConfig 헤더 기반으로 전환 | 대기 |
+| carelog-be: AuthServiceImpl.logout() Redis Blacklist 추가 | 대기 |
+| carelog-be: Redis 의존성 추가 (shared Redis) | 대기 |
+| GitHub Actions path filter 워크플로우 (be/gateway 배포 독립) | 대기 |
+
+#### Step 3 구현 결정 사항
+
+**로그아웃 처리: Option A (carelog-be 전담)**
+```
+클라이언트 → SCG(JWT 검증) → carelog-be(/auth/logout)
+                                  ↓
+                     DB: RefreshToken 삭제
+                     Redis: AccessToken Blacklist 등록 (TTL = 남은 유효기간)
+```
+- SCG는 라우팅/검증만 담당, 비즈니스 로직(DB 접근)은 carelog-be에 유지
+- shared Redis: carelog-be(`StringRedisTemplate`) + carelog-gateway(`ReactiveStringRedisTemplate`) 모두 `blacklist:` prefix 키 공유
+
+**CustomUserDetails 하위 호환 전략**
+
+기존 컨트롤러/서비스 전체가 `@AuthenticationPrincipal CustomUserDetails` 사용 중.
+`GatewayHeaderAuthFilter`가 헤더에서 읽어 `CustomUserDetails` 객체를 직접 생성하는 방식으로 하위 호환 유지.
+
+```java
+// 헤더 기반 생성자 추가 (DB 조회 없이 헤더 값으로만 구성)
+public CustomUserDetails(String userId, UUID organizationId, String role, UUID publicId) { ... }
+```
+
+- 기존 컨트롤러/서비스 코드 변경 없음
+- `TenantFilter`도 변경 없음 (`authentication.getPrincipal() instanceof CustomUserDetails` 그대로 동작)
+- `AuditorAwareImpl`도 변경 없음 (`userDetails.getUsername()` → userId 반환)
+
+**GatewayHeaderAuthFilter (carelog-be 신규)**
+- `OncePerRequestFilter` 구현, `@Component` 금지 (SecurityConfig에서 직접 생성)
+- `X-User-Id`, `X-Organization-Id`, `X-Role`, `X-Public-Id` 헤더 읽어서 SecurityContext 설정
+- 헤더 없으면 그냥 통과 (공개 경로 처리 위임은 SecurityConfig permitAll에서)
+
+**LoggingAspect `@Around` 포인트컷 방어 처리**
+- 기존 CGLIB 버그 (트러블슈팅 [2] 참고): `@Component` + `OncePerRequestFilter` → CGLIB `final` 메서드 프록시 실패
+- 현재 `@AfterThrowing`엔 `!within(*..*Filter)` 적용됨, `@Around` 3개엔 미적용 상태
+- `GatewayHeaderAuthFilter` 추가 시 `LoggingAspect` `@Around` 포인트컷 3개에도 `&& !within(*..*Filter)` 추가 필요
+- `@Component` 안 써도, 나중에 실수로 달 경우를 대비한 방어적 처리
+
+**모듈 구성**
+- Spring Cloud 버전: `2024.0.1` (Spring Boot 3.4.x 호환)
+- carelog-gateway 패키지: `carelog.gateway`
+- 공개 경로 (SCG JwtGlobalFilter 통과 목록): `/api/v1/auth/login`, `/api/v1/auth/refresh`, `/api/v1/users/managers`
+
+**⚠️ 헤더 스푸핑 방어 (보안 필수)**
+- 클라이언트가 `X-User-Id` 등 헤더를 직접 조작해 보낼 경우 SCG 우회 권한 탈취 가능
+- `JwtGlobalFilter`에서 JWT 검증/주입 전에 인입 헤더 먼저 strip 필요
+- 공개 경로도 strip 적용 대상 (검증 건너뛰어도 strip은 필수)
+- 상세 구현: `docs/scg-auth-design.md` 참고
+
+**⚠️ Redis 네트워크 인프라 전제 조건**
+- Option A 구조에서 carelog-be(온프레미스) → EC2 Redis 쓰기 접근 필요
+- Cloudflare Tunnel / VPN 양방향 통신 확인 선행 필요 (코드 작업 전 인프라 확정)
 
 ### Step 4: FastAPI 연동 🔜 대기
 

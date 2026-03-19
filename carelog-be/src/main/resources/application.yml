@@ -13,7 +13,10 @@ spring:
     properties:
       hibernate:
         default_batch_fetch_size: 100
-
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
 server:
   servlet:
     context-path: /api/v1
