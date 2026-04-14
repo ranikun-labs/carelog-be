@@ -9,7 +9,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
-public class CustomUserDetails implements UserDetails {
+public class CustomUserDetails implements UserDetails, UserPrincipal {
 
     private final User user;
 
@@ -25,6 +25,9 @@ public class CustomUserDetails implements UserDetails {
     public String getUsername() {
         return user.getUserId();
     }
+
+    @Override
+    public String getUserId() {return user.getUserId();}
 
     @Override
     public String getPassword() {

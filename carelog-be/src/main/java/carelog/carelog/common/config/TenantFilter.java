@@ -1,6 +1,6 @@
 package carelog.carelog.common.config;
 
-import carelog.carelog.auth.app.CustomUserDetails;
+import carelog.carelog.auth.app.UserPrincipal;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -28,8 +28,8 @@ public class TenantFilter extends OncePerRequestFilter {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
         if (authentication != null &&
-        authentication.getPrincipal() instanceof CustomUserDetails userDetails)
-        {
+        authentication.getPrincipal() instanceof UserPrincipal userDetails
+        ) {
             //  ThreadLocal에 저장
             TenantContext.set(userDetails.getOrganizationId());
             log.debug("Tenant filter activated - organizationId: {}",
