@@ -332,21 +332,28 @@ TTL: 30분
 > ⚠️ User 엔드포인트도 publicId 기반으로 전환 필요 — Journal 이후 처리
 > ✅ Customer name 검색 API 구현 완료 — `GET /users/customers?name=...`
 
-### Step 3: `refactor/scg-monorepo` 🔜 진행 예정
+### Step 3: `refactor/scg-monorepo` 🔄 진행 중
 
 | 항목 | 상태 |
 |------|------|
-| Gradle Multi-Module 모노레포 전환 (settings.gradle, 루트 build.gradle) | 대기 |
-| carelog-be → `carelog-be/` 서브디렉토리 이동 (git mv) | 대기 |
-| `carelog-gateway` 모듈 신규 생성 | 대기 |
-| SCG JwtGlobalFilter (GlobalFilter + Ordered) | 대기 |
-| SCG RedisBlacklistService (ReactiveStringRedisTemplate) | 대기 |
+| Gradle Multi-Module 모노레포 전환 (settings.gradle, 루트 build.gradle) | ✅ 완료 |
+| carelog-be → `carelog-be/` 서브디렉토리 이동 (git mv) | ✅ 완료 |
+| `carelog-gateway` 모듈 신규 생성 | ✅ 완료 |
+| SCG JwtGlobalFilter (JWT 검증 + Blacklist 체크 + X-Gateway-Secret 주입) | ✅ 완료 |
+| SCG RedisBlacklistService (ReactiveStringRedisTemplate, isBlacklisted) | ✅ 완료 |
+| X-Gateway-Secret 헤더 방어 (JwtGlobalFilter strip + 주입, application.yml) | ✅ 완료 |
+| docker-compose Redis 추가 | ✅ 완료 |
+| UserPrincipal 인터페이스 신규 생성 | ✅ 완료 |
+| CustomUserDetails — implements UserPrincipal 추가 | ✅ 완료 |
+| GatewayUserDetails 신규 생성 (헤더 기반) | ✅ 완료 |
+| TenantFilter — instanceof UserPrincipal 로 변경 | ✅ 완료 |
+| carelog-be: GatewayHeaderAuthFilter 추가 (X-Gateway-Secret 검증 + SecurityContext 설정) | 🔄 진행 중 (SecurityContext 설정 미완성) |
 | carelog-be: JwtAuthenticationFilter 제거 | 대기 |
-| carelog-be: GatewayHeaderAuthFilter 추가 | 대기 |
-| carelog-be: CustomUserDetails 헤더 기반 생성자 추가 | 대기 |
 | carelog-be: SecurityConfig 헤더 기반으로 전환 | 대기 |
-| carelog-be: AuthServiceImpl.logout() Redis Blacklist 추가 | 대기 |
-| carelog-be: Redis 의존성 추가 (shared Redis) | 대기 |
+| carelog-be: RedisBlacklistService 신규 생성 (addToBlacklist) | 대기 |
+| carelog-be: JwtTokenProvider — getRemainingValidity() 추가 | 대기 |
+| carelog-be: AuthService/AuthServiceImpl.logout() — accessToken 파라미터 + Redis 등록 | 대기 |
+| carelog-be: AuthController.logout() — Authorization 헤더 추출 | 대기 |
 | GitHub Actions path filter 워크플로우 (be/gateway 배포 독립) | 대기 |
 
 #### Step 3 구현 결정 사항
