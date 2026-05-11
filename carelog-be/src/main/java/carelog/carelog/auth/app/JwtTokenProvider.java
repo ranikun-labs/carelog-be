@@ -1,19 +1,17 @@
 package carelog.carelog.auth.app;
 
 import io.jsonwebtoken.*;
-import io.jsonwebtoken.security.Keys;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
+import io.jsonwebtoken.security.*;
+import lombok.extern.slf4j.*;
+import org.springframework.beans.factory.annotation.*;
+import org.springframework.stereotype.*;
 
-import javax.crypto.SecretKey;
-import java.nio.charset.StandardCharsets;
+import javax.crypto.*;
+import java.lang.SecurityException;
+import java.nio.charset.*;
+import java.time.*;
 import java.time.Clock;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.OffsetDateTime;
-import java.util.Date;
-import java.util.UUID;
+import java.util.*;
 
 @Slf4j
 @Component
@@ -36,7 +34,9 @@ public class JwtTokenProvider {
         this.clock = clock;
     }
 
-    /** Access Token 생성 */
+    /**
+     * Access Token 생성
+     */
     public String generateAccessToken(
             String userId, UUID organizationId, String role, UUID publicId
     ) {
@@ -52,7 +52,9 @@ public class JwtTokenProvider {
                 .compact();
     }
 
-    /** Refresh Token 생성 */
+    /**
+     * Refresh Token 생성
+     */
     public String generateRefreshToken(String userId) {
         Instant now = Instant.now(clock);
         return Jwts.builder()
@@ -63,12 +65,16 @@ public class JwtTokenProvider {
                 .compact();
     }
 
-    /** Token에서 userId 추출 */
+    /**
+     * Token에서 userId 추출
+     */
     public String getUserIdFromToken(String token) {
         return getClaims(token).getSubject();
     }
 
-    /** 토큰 유효성 검증 */
+    /**
+     * 토큰 유효성 검증
+     */
     public boolean validateToken(String token) {
         try {
             Jwts.parser()
@@ -88,23 +94,31 @@ public class JwtTokenProvider {
         return false;
     }
 
-    /** Refresh Token의 만료 시간 계산 */
+    /**
+     * Refresh Token의 만료 시간 계산
+     */
     public OffsetDateTime getRefreshTokenExpiryDate() {
         return OffsetDateTime.now(clock).plus(Duration.ofMillis(refreshTokenValidity));
     }
 
-    /** 토큰에서 organizationId 추출 (Hibernate Filter 활성화용) */
+    /**
+     * 토큰에서 organizationId 추출 (Hibernate Filter 활성화용)
+     */
     public UUID getOrganizationIdFromToken(String token) {
         return UUID.fromString(getClaims(token).get(
                 "organizationId", String.class));
     }
 
-    /** 토큰에서 role 추출 (SCG 권한 체크용) */
+    /**
+     * 토큰에서 role 추출 (SCG 권한 체크용)
+     */
     public String getRoleFromToken(String token) {
         return getClaims(token).get("role", String.class);
     }
 
-    /** 토큰에서 publicId 추출 (FastAPI 연동용) */
+    /**
+     * 토큰에서 publicId 추출 (FastAPI 연동용)
+     */
     public UUID getPublicIdFromToken(String token) {
         return UUID.fromString(getClaims(token).get(
                 "publicId", String.class));
@@ -116,5 +130,12 @@ public class JwtTokenProvider {
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
+    }
+
+    public Duration getRemainingValidity(String token) {
+        Date expiration = getClaims(token).getExpiration();
+
+        long remaining = expiration.getTime() - Instant.now(clock).toEpochMilli();
+        return Duration.ofMillis(Math.max(remaining, 0));
     }
 }

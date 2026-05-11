@@ -1,37 +1,30 @@
 package carelog.carelog.auth.app;
 
 
-import carelog.carelog.auth.domain.RefreshToken;
-import carelog.carelog.auth.domain.RefreshTokenRepository;
-import carelog.carelog.auth.web.dto.request.LoginRequest;
-import carelog.carelog.auth.web.dto.request.TokenRefreshRequest;
-import carelog.carelog.auth.web.dto.response.LoginResponse;
-import carelog.carelog.auth.web.dto.response.TokenRefreshResponse;
-import carelog.carelog.common.web.exception.CustomException;
-import carelog.carelog.common.web.exception.ExceptionStatus;
-import carelog.carelog.user.domain.User;
-import carelog.carelog.user.domain.UserRepository;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.AuthenticationException;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import carelog.carelog.auth.domain.*;
+import carelog.carelog.auth.web.dto.request.*;
+import carelog.carelog.auth.web.dto.response.*;
+import carelog.carelog.common.web.exception.*;
+import carelog.carelog.user.domain.*;
+import lombok.*;
+import lombok.extern.slf4j.*;
+import org.springframework.security.authentication.*;
+import org.springframework.security.core.*;
+import org.springframework.stereotype.*;
+import org.springframework.transaction.annotation.*;
 
-import java.time.Clock;
-import java.time.OffsetDateTime;
+import java.time.*;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-public class AuthServiceImpl implements AuthService{
+public class AuthServiceImpl implements AuthService {
     private final UserRepository userRepository;
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final RedisBlacklistService redisBlacklistService;
     private final Clock clock;
 
 
@@ -49,7 +42,7 @@ public class AuthServiceImpl implements AuthService{
                     );
 
             // CustomDetails에서 organizationId, publicId 추출
-            CustomUserDetails userDetails = (CustomUserDetails)authentication.getPrincipal();
+            CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
 
             // 2. 토큰 생성
             String accessToken = jwtTokenProvider.generateAccessToken(
@@ -79,7 +72,11 @@ public class AuthServiceImpl implements AuthService{
 
     @Override
     @Transactional
-    public void logout(String userId) {
+    public void logout(String userId, String accessToken) {
+        Duration ttl = jwtTokenProvider.getRemainingValidity(accessToken);
+        redisBlacklistService.addToBlacklist(accessToken, ttl);
+
+        // Refresh Token DB 삭제
         refreshTokenRepository.deleteByUserId(userId);
         log.info("로그아웃: {}", userId);
     }
