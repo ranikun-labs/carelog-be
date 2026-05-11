@@ -43,7 +43,7 @@ class JwtGlobalFilter(
             .build()
 
         // 공개 경로는 필터 통과
-        if (publicPaths.any { path.startsWith(it)}) {
+        if (publicPaths.any { path.startsWith(it) }) {
             return chain.filter(sanitizedExchange)
         }
 
@@ -56,6 +56,7 @@ class JwtGlobalFilter(
 
         val token = authHeader.removePrefix("Bearer ")
 
+        // JWT 서명 검증
         val claims = try {
             jwtVerifier.verifyAndGetClaims(token)
         } catch (e: JwtException) {
@@ -63,20 +64,23 @@ class JwtGlobalFilter(
             return exchange.response.setComplete()
         }
 
-        // Redis Blacklist 조회
+        // Redis Blacklist 체크
         return blacklistService.isBlacklisted(token).flatMap { isBlacklisted ->
             if (isBlacklisted) {
                 exchange.response.statusCode = HttpStatus.UNAUTHORIZED
                 exchange.response.setComplete()
             } else {
+                // 검증된 Claims -> 헤더 주입 + X-Gateway-Secret
                 val mutatedExchange = sanitizedExchange.mutate()
-                    .request { it.headers { headers ->
-                        headers.set("X-User-Id", claims.subject)
-                        headers.set("X-Organization-Id", claims["organizationId"]?.toString() ?: "")
-                        headers.set("X-Role", claims["role"]?.toString() ?: "")
-                        headers.set("X-Public-Id", claims["publicId"]?.toString() ?: "")
-                        headers.set("X-Gateway-Secret", internalSecret)
-                    }}
+                    .request {
+                        it.headers { headers ->
+                            headers.set("X-User-Id", claims.subject)
+                            headers.set("X-Organization-Id", claims["organizationId"]?.toString() ?: "")
+                            headers.set("X-Role", claims["role"]?.toString() ?: "")
+                            headers.set("X-Public-Id", claims["publicId"]?.toString() ?: "")
+                            headers.set("X-Gateway-Secret", internalSecret)
+                        }
+                    }
                     .build()
                 chain.filter(mutatedExchange)
             }
