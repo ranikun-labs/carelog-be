@@ -1,26 +1,22 @@
 package carelog.carelog.auth.web;
 
-import carelog.carelog.auth.app.GatewayUserDetails;
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
-import org.springframework.web.filter.OncePerRequestFilter;
+import carelog.carelog.auth.app.*;
+import jakarta.servlet.*;
+import jakarta.servlet.http.*;
+import lombok.*;
+import lombok.extern.slf4j.*;
+import org.springframework.security.authentication.*;
+import org.springframework.security.core.context.*;
+import org.springframework.web.filter.*;
 
-import java.io.IOException;
-import java.util.UUID;
+import java.io.*;
+import java.util.*;
 
 @Slf4j
-@Component
 @RequiredArgsConstructor
 public class GatewayHeaderAuthFilter extends OncePerRequestFilter {
 
-    @Value("${gateway.internal-secret}")
-    private String internalSecret;
+    private final String internalSecret;
 
     @Override
     protected void doFilterInternal(
@@ -50,10 +46,16 @@ public class GatewayHeaderAuthFilter extends OncePerRequestFilter {
                     UUID.fromString(publicId)
             );
 
+            // SecurityContext에 인증 정보 설정
+            UsernamePasswordAuthenticationToken auth =
+                    new UsernamePasswordAuthenticationToken(
+                            userDetails, null, userDetails.getAuthorities()
+                    );
+            SecurityContextHolder.getContext().setAuthentication(auth);
 
-
+            log.debug("Gateway auth set for user: {}", userId);
         }
 
-
+        filterChain.doFilter(request, response);
     }
 }
