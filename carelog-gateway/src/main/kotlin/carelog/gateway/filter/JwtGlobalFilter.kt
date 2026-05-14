@@ -1,8 +1,8 @@
 package carelog.gateway.filter
 
 import carelog.gateway.blacklist.RedisBlacklistService
+import carelog.gateway.config.GatewayConfig
 import io.jsonwebtoken.JwtException
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.cloud.gateway.filter.GatewayFilterChain
 import org.springframework.cloud.gateway.filter.GlobalFilter
 import org.springframework.core.Ordered
@@ -16,11 +16,11 @@ import reactor.core.publisher.Mono
 class JwtGlobalFilter(
     private val jwtVerifier: JwtVerifier,
     private val blacklistService: RedisBlacklistService,
-    @param:Value("\${gateway.public-paths}")
-    private val publicPaths: List<String>,
-    @param:Value("\${gateway.internal-secret}")
-    private val internalSecret: String
+    private val gatewayConfig: GatewayConfig
 ) : GlobalFilter, Ordered {
+
+    private val publicPaths get() = gatewayConfig.publicPaths
+    private val internalSecret get() = gatewayConfig.internalSecret
 
     override fun filter(
         exchange: ServerWebExchange,
@@ -42,9 +42,12 @@ class JwtGlobalFilter(
             }
             .build()
 
-        // 공개 경로는 필터 통과
+        // 공개 경로는 JWT 검증 없이 통과 (단, X-Gateway-Secret은 붙임)
         if (publicPaths.any { path.startsWith(it) }) {
-            return chain.filter(sanitizedExchange)
+            val publicExchange = sanitizedExchange.mutate()
+                .request { it.headers { headers -> headers.set("X-Gateway-Secret", internalSecret) } }
+                .build()
+            return chain.filter(publicExchange)
         }
 
         // Authorization 헤더에서 Bearer 토큰 추출
