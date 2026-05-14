@@ -19,6 +19,11 @@ public class GatewayHeaderAuthFilter extends OncePerRequestFilter {
     private final String internalSecret;
 
     @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        return "OPTIONS".equalsIgnoreCase(request.getMethod());
+    }
+
+    @Override
     protected void doFilterInternal(
             HttpServletRequest request,
             HttpServletResponse response,
