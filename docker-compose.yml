@@ -5,9 +5,9 @@ services:
     environment:
       POSTGRES_DB: carelog
       POSTGRES_USER: carelog
-      POSTGRES_PASSWORD: carelog
+      POSTGRES_PASSWORD: carelog1506
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - carelog-db-data:/var/lib/postgresql/data
 
