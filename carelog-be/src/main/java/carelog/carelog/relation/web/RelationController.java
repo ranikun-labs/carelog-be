@@ -1,6 +1,6 @@
 package carelog.carelog.relation.web;
 
-import carelog.carelog.auth.app.CustomUserDetails;
+import carelog.carelog.auth.app.UserPrincipal;
 import carelog.carelog.common.web.dto.response.*;
 import carelog.carelog.relation.app.*;
 import carelog.carelog.relation.web.dto.*;
@@ -24,7 +24,7 @@ public class RelationController {
     @PreAuthorize("hasRole('MANAGER')")
     public ResponseEntity<ApiResponse<RelationResponse>> createRelation(
             @Valid @RequestBody RelationCreateRequest request,
-            @AuthenticationPrincipal CustomUserDetails userDetails
+            @AuthenticationPrincipal UserPrincipal userDetails
     ) {
         RelationResponse response = relationService.createRelation(request.customerPublicId(), userDetails);
         return ApiResponse.created(response);
@@ -33,7 +33,7 @@ public class RelationController {
     @GetMapping("/{relationPublicId}")
     public ResponseEntity<ApiResponse<RelationResponse>> findRelationByPublicId(
             @PathVariable UUID relationPublicId,
-            @AuthenticationPrincipal CustomUserDetails userDetails
+            @AuthenticationPrincipal UserPrincipal userDetails
     ) {
         RelationResponse response = relationService.findRelationByPublicId(relationPublicId, userDetails);
         return ApiResponse.ok(response);
@@ -43,7 +43,7 @@ public class RelationController {
     public ResponseEntity<ApiResponse<RelationResponse>> findRelationByManagerAndCustomer(
             @PathVariable UUID managerPublicId,
             @PathVariable UUID customerPublicId,
-            @AuthenticationPrincipal CustomUserDetails userDetails
+            @AuthenticationPrincipal UserPrincipal userDetails
     ) {
         RelationResponse response = relationService.findRelationByManagerAndCustomer(managerPublicId, customerPublicId, userDetails);
         return ApiResponse.ok(response);
@@ -51,7 +51,7 @@ public class RelationController {
 
     @GetMapping("/manager")
     public ResponseEntity<ApiResponse<List<RelationResponse>>> findAllRelationByManager(
-            @AuthenticationPrincipal CustomUserDetails userDetails
+            @AuthenticationPrincipal UserPrincipal userDetails
     ) {
         List<RelationResponse> responses = relationService.findAllRelationsByManager(userDetails);
         return ApiResponse.ok(responses);
@@ -60,7 +60,7 @@ public class RelationController {
     @GetMapping("/customer/{customerPublicId}")
     public ResponseEntity<ApiResponse<List<RelationResponse>>> findAllRelationByCustomer(
             @PathVariable UUID customerPublicId,
-            @AuthenticationPrincipal CustomUserDetails userDetails
+            @AuthenticationPrincipal UserPrincipal userDetails
     ) {
         List<RelationResponse> responses = relationService.findAllRelationsByCustomer(customerPublicId, userDetails);
         return ApiResponse.ok(responses);
@@ -71,7 +71,7 @@ public class RelationController {
     public ResponseEntity<ApiResponse<RelationResponse>> updateRelationStatus(
             @PathVariable UUID relationPublicId,
             @Valid @RequestBody RelationStatusUpdateRequest request,
-            @AuthenticationPrincipal CustomUserDetails userDetails
+            @AuthenticationPrincipal UserPrincipal userDetails
     ) {
         RelationResponse response = relationService.updateRelationsStatus(relationPublicId, request.status(), userDetails);
         return ApiResponse.ok(response);
@@ -81,7 +81,7 @@ public class RelationController {
     @PreAuthorize("hasRole('MANAGER')")
     public ResponseEntity<Void> deleteRelation(
             @PathVariable UUID relationPublicId,
-            @AuthenticationPrincipal CustomUserDetails userDetails
+            @AuthenticationPrincipal UserPrincipal userDetails
     ) {
         relationService.deleteRelation(relationPublicId, userDetails);
         return ApiResponse.noContent();

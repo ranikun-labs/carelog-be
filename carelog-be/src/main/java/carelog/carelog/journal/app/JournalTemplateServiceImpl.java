@@ -1,6 +1,6 @@
 package carelog.carelog.journal.app;
 
-import carelog.carelog.auth.app.CustomUserDetails;
+import carelog.carelog.auth.app.UserPrincipal;
 import carelog.carelog.journal.domain.JournalTemplate;
 import carelog.carelog.journal.domain.JournalTemplateRepository;
 import carelog.carelog.journal.domain.JournalTemplateStatus;
@@ -21,7 +21,7 @@ public class JournalTemplateServiceImpl implements JournalTemplateService {
 
     @Override
     @Transactional
-    public JournalTemplateResponse createTemplate(JournalTemplateCreateRequest request, CustomUserDetails userDetails) {
+    public JournalTemplateResponse createTemplate(JournalTemplateCreateRequest request, UserPrincipal userDetails) {
         JournalTemplate template = JournalTemplate.create(request.name(), request.fields());
         template.assignOrganization(userDetails.getOrganizationId());
 

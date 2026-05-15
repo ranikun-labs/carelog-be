@@ -1,6 +1,6 @@
 package carelog.carelog.journal.web;
 
-import carelog.carelog.auth.app.CustomUserDetails;
+import carelog.carelog.auth.app.UserPrincipal;
 import carelog.carelog.common.web.dto.response.ApiResponse;
 import carelog.carelog.journal.app.JournalService;
 import carelog.carelog.journal.web.dto.*;
@@ -24,7 +24,7 @@ public class JournalController {
     public ResponseEntity<ApiResponse<JournalResponse>> createJournal(
             @PathVariable UUID relationPublicId,
             @RequestBody JournalCreateRequest request,
-            @AuthenticationPrincipal CustomUserDetails userDetails
+            @AuthenticationPrincipal UserPrincipal userDetails
     ) {
         JournalResponse response = journalService.createJournal(relationPublicId, request, userDetails);
         return ApiResponse.created(response);
@@ -35,7 +35,7 @@ public class JournalController {
             @PathVariable UUID relationPublicId,
             @PathVariable UUID journalPublicId,
             @RequestBody JournalCreateRequest request,
-            @AuthenticationPrincipal CustomUserDetails userDetails
+            @AuthenticationPrincipal UserPrincipal userDetails
     ) {
         JournalResponse response = journalService.updateJournal(relationPublicId, journalPublicId, request, userDetails);
         return ApiResponse.ok(response);
@@ -44,7 +44,7 @@ public class JournalController {
     @GetMapping
     public ResponseEntity<ApiResponse<List<JournalResponse>>> findAllJournals(
             @PathVariable UUID relationPublicId,
-            @AuthenticationPrincipal CustomUserDetails userDetails
+            @AuthenticationPrincipal UserPrincipal userDetails
     ) {
         List<JournalResponse> responses = journalService.findAllJournals(relationPublicId, userDetails);
         return ApiResponse.ok(responses);
@@ -54,7 +54,7 @@ public class JournalController {
     public ResponseEntity<ApiResponse<JournalResponse>> findJournal(
             @PathVariable UUID relationPublicId,
             @PathVariable UUID journalPublicId,
-            @AuthenticationPrincipal CustomUserDetails userDetails
+            @AuthenticationPrincipal UserPrincipal userDetails
     ) {
         JournalResponse response = journalService.findJournal(relationPublicId, journalPublicId, userDetails);
         return ApiResponse.ok(response);
@@ -64,7 +64,7 @@ public class JournalController {
     public ResponseEntity<ApiResponse<List<JournalResponse>>> findJournalHistory(
             @PathVariable UUID relationPublicId,
             @PathVariable UUID journalPublicId,
-            @AuthenticationPrincipal CustomUserDetails userDetails
+            @AuthenticationPrincipal UserPrincipal userDetails
     ) {
         List<JournalResponse> responses = journalService.findJournalHistory(relationPublicId, journalPublicId, userDetails);
         return ApiResponse.ok(responses);

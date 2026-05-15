@@ -1,6 +1,6 @@
 package carelog.carelog.journal.web;
 
-import carelog.carelog.auth.app.CustomUserDetails;
+import carelog.carelog.auth.app.UserPrincipal;
 import carelog.carelog.common.web.dto.response.ApiResponse;
 import carelog.carelog.journal.app.JournalTemplateService;
 import carelog.carelog.journal.web.dto.JournalTemplateCreateRequest;
@@ -24,7 +24,7 @@ public class JournalTemplateController {
     @PreAuthorize("hasRole('MANAGER')")
     public ResponseEntity<ApiResponse<JournalTemplateResponse>> createTemplate(
             @RequestBody JournalTemplateCreateRequest request,
-            @AuthenticationPrincipal CustomUserDetails userDetails
+            @AuthenticationPrincipal UserPrincipal userDetails
     ) {
         JournalTemplateResponse response = journalTemplateService.createTemplate(request, userDetails);
         return ApiResponse.created(response);

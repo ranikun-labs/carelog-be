@@ -1,6 +1,6 @@
 package carelog.carelog.user.app;
 
-import carelog.carelog.auth.app.CustomUserDetails;
+import carelog.carelog.auth.app.UserPrincipal;
 import carelog.carelog.common.web.exception.*;
 import carelog.carelog.user.domain.*;
 import carelog.carelog.user.web.dto.*;
@@ -53,7 +53,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
-    public UserResponse createCustomer(CustomerCreateRequest request, CustomUserDetails userDetails) {
+    public UserResponse createCustomer(CustomerCreateRequest request, UserPrincipal userDetails) {
         User newUser = User.builder()
                 .name(request.name())
                 .role(UserRole.CUSTOMER)

@@ -1,6 +1,6 @@
 package carelog.carelog.journal.app;
 
-import carelog.carelog.auth.app.CustomUserDetails;
+import carelog.carelog.auth.app.UserPrincipal;
 import carelog.carelog.common.web.exception.CustomException;
 import carelog.carelog.common.web.exception.ExceptionStatus;
 import carelog.carelog.journal.domain.*;
@@ -25,7 +25,7 @@ public class JournalServiceImpl implements JournalService {
     private final JournalTemplateRepository templateRepository;
     private final RelationRepository relationRepository;
 
-    private Relation findRelationAndCheckOwnership(UUID relationPublicId, CustomUserDetails userDetails) {
+    private Relation findRelationAndCheckOwnership(UUID relationPublicId, UserPrincipal userDetails) {
         Relation relation = relationRepository.findByPublicId(relationPublicId)
                 .orElseThrow(() -> new CustomException(ExceptionStatus.RELATION_NOT_FOUND));
 
@@ -37,7 +37,7 @@ public class JournalServiceImpl implements JournalService {
 
     @Override
     @Transactional
-    public JournalResponse createJournal(UUID relationPublicId, JournalCreateRequest request, CustomUserDetails userDetails) {
+    public JournalResponse createJournal(UUID relationPublicId, JournalCreateRequest request, UserPrincipal userDetails) {
         Relation relation = findRelationAndCheckOwnership(relationPublicId, userDetails);
 
         JournalTemplate template = null;
@@ -59,7 +59,7 @@ public class JournalServiceImpl implements JournalService {
 
     @Override
     @Transactional
-    public JournalResponse updateJournal(UUID relationPublicId, UUID journalPublicId, JournalCreateRequest request, CustomUserDetails userDetails) {
+    public JournalResponse updateJournal(UUID relationPublicId, UUID journalPublicId, JournalCreateRequest request, UserPrincipal userDetails) {
         findRelationAndCheckOwnership(relationPublicId, userDetails);
 
         RelationJournal existing = journalRepository.findByPublicIdAndStatus(journalPublicId, JournalStatus.ACTIVE)
@@ -86,7 +86,7 @@ public class JournalServiceImpl implements JournalService {
     }
 
     @Override
-    public List<JournalResponse> findAllJournals(UUID relationPublicId, CustomUserDetails userDetails) {
+    public List<JournalResponse> findAllJournals(UUID relationPublicId, UserPrincipal userDetails) {
         Relation relation = findRelationAndCheckOwnership(relationPublicId, userDetails);
 
         List<JournalResponse> responses = journalRepository
@@ -98,7 +98,7 @@ public class JournalServiceImpl implements JournalService {
     }
 
     @Override
-    public JournalResponse findJournal(UUID relationPublicId, UUID journalPublicId, CustomUserDetails userDetails) {
+    public JournalResponse findJournal(UUID relationPublicId, UUID journalPublicId, UserPrincipal userDetails) {
         findRelationAndCheckOwnership(relationPublicId, userDetails);
 
         RelationJournal journal = journalRepository.findByPublicIdAndStatus(journalPublicId, JournalStatus.ACTIVE)
@@ -109,7 +109,7 @@ public class JournalServiceImpl implements JournalService {
     }
 
     @Override
-    public List<JournalResponse> findJournalHistory(UUID relationPublicId, UUID journalPublicId, CustomUserDetails userDetails) {
+    public List<JournalResponse> findJournalHistory(UUID relationPublicId, UUID journalPublicId, UserPrincipal userDetails) {
         findRelationAndCheckOwnership(relationPublicId, userDetails);
 
         RelationJournal latest = journalRepository.findByPublicIdAndStatus(journalPublicId, JournalStatus.ACTIVE)

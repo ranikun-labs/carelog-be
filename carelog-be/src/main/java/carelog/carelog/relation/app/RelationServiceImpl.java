@@ -1,6 +1,6 @@
 package carelog.carelog.relation.app;
 
-import carelog.carelog.auth.app.CustomUserDetails;
+import carelog.carelog.auth.app.UserPrincipal;
 import carelog.carelog.common.web.exception.*;
 import carelog.carelog.relation.domain.*;
 import carelog.carelog.relation.web.dto.*;
@@ -26,8 +26,8 @@ public class RelationServiceImpl implements RelationService {
 
     @Override
     @Transactional
-    public RelationResponse createRelation(UUID customerPublicId, CustomUserDetails userDetails) {
-        User manager = userRepository.findByUserId(userDetails.getUsername())
+    public RelationResponse createRelation(UUID customerPublicId, UserPrincipal userDetails) {
+        User manager = userRepository.findByUserId(userDetails.getUserId())
                 .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
         User customer = userRepository.findByPublicId(customerPublicId)
                 .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
@@ -47,7 +47,7 @@ public class RelationServiceImpl implements RelationService {
     }
 
     @Override
-    public RelationResponse findRelationByPublicId(UUID relationPublicId, CustomUserDetails userDetails) {
+    public RelationResponse findRelationByPublicId(UUID relationPublicId, UserPrincipal userDetails) {
         Relation relation = relationRepository.findByPublicId(relationPublicId)
                 .orElseThrow(() -> new CustomException(ExceptionStatus.RELATION_NOT_FOUND));
 
@@ -61,7 +61,7 @@ public class RelationServiceImpl implements RelationService {
     }
 
     @Override
-    public RelationResponse findRelationByManagerAndCustomer(UUID managerPublicId, UUID customerPublicId, CustomUserDetails userDetails) {
+    public RelationResponse findRelationByManagerAndCustomer(UUID managerPublicId, UUID customerPublicId, UserPrincipal userDetails) {
         if (!userDetails.getPublicId().equals(managerPublicId) &&
                 !userDetails.getPublicId().equals(customerPublicId)) {
             throw new CustomException(ExceptionStatus.ACCESS_DENIED);
@@ -79,8 +79,8 @@ public class RelationServiceImpl implements RelationService {
     }
 
     @Override
-    public List<RelationResponse> findAllRelationsByManager(CustomUserDetails userDetails) {
-        User manager = userRepository.findByUserId(userDetails.getUsername())
+    public List<RelationResponse> findAllRelationsByManager(UserPrincipal userDetails) {
+        User manager = userRepository.findByUserId(userDetails.getUserId())
                 .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
 
         List<RelationResponse> responses = relationRepository.findAllByManager(manager).stream()
@@ -90,7 +90,7 @@ public class RelationServiceImpl implements RelationService {
     }
 
     @Override
-    public List<RelationResponse> findAllRelationsByCustomer(UUID customerPublicId, CustomUserDetails userDetails) {
+    public List<RelationResponse> findAllRelationsByCustomer(UUID customerPublicId, UserPrincipal userDetails) {
         if (!userDetails.getPublicId().equals(customerPublicId)) {
             throw new CustomException(ExceptionStatus.ACCESS_DENIED);
         }
@@ -106,7 +106,7 @@ public class RelationServiceImpl implements RelationService {
 
     @Override
     @Transactional
-    public RelationResponse updateRelationsStatus(UUID relationPublicId, RelationStatus newStatus, CustomUserDetails userDetails) {
+    public RelationResponse updateRelationsStatus(UUID relationPublicId, RelationStatus newStatus, UserPrincipal userDetails) {
         Relation relation = relationRepository.findByPublicId(relationPublicId)
                 .orElseThrow(() -> new CustomException(ExceptionStatus.RELATION_NOT_FOUND));
 
@@ -122,7 +122,7 @@ public class RelationServiceImpl implements RelationService {
 
     @Override
     @Transactional
-    public void deleteRelation(UUID relationPublicId, CustomUserDetails userDetails) {
+    public void deleteRelation(UUID relationPublicId, UserPrincipal userDetails) {
         Relation relation = relationRepository.findByPublicId(relationPublicId)
                 .orElseThrow(() -> new CustomException(ExceptionStatus.RELATION_NOT_FOUND));
 

@@ -1,6 +1,6 @@
 package carelog.carelog.user.web;
 
-import carelog.carelog.auth.app.CustomUserDetails;
+import carelog.carelog.auth.app.UserPrincipal;
 import carelog.carelog.common.web.dto.response.ApiResponse;
 import carelog.carelog.user.app.UserService;
 import carelog.carelog.user.web.dto.CustomerCreateRequest;
@@ -32,7 +32,7 @@ public class UserController {
     @PostMapping("/customers")
     public ResponseEntity<ApiResponse<UserResponse>> createCustomer(
             @Valid @RequestBody CustomerCreateRequest request,
-            @AuthenticationPrincipal CustomUserDetails userDetails
+            @AuthenticationPrincipal UserPrincipal userDetails
     ) {
         UserResponse response = userService.createCustomer(request, userDetails);
         return ApiResponse.created(response);

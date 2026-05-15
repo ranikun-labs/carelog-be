@@ -1,6 +1,6 @@
 package carelog.carelog.user.app;
 
-import carelog.carelog.auth.app.CustomUserDetails;
+import carelog.carelog.auth.app.UserPrincipal;
 import carelog.carelog.user.web.dto.CustomerCreateRequest;
 import carelog.carelog.user.web.dto.ManagerCreateRequest;
 import carelog.carelog.user.web.dto.UserResponse;
@@ -11,7 +11,7 @@ import java.util.UUID;
 
 public interface UserService {
     UserResponse createManager(ManagerCreateRequest request);
-    UserResponse createCustomer(CustomerCreateRequest request, CustomUserDetails userDetails);
+    UserResponse createCustomer(CustomerCreateRequest request, UserPrincipal userDetails);
     UserResponse findUserByUserId(String userId);
     UserResponse findUserByEmail(String email);
     UserResponse updateUser(UUID publicId, UserUpdateRequest request);
