@@ -78,9 +78,9 @@ class JwtGlobalFilter(
                     .request {
                         it.headers { headers ->
                             headers.set("X-User-Id", claims.subject)
-                            headers.set("X-Organization-Id", claims["organizationId"]?.toString() ?: "")
+                            claims["organizationId"]?.let { headers.set("X-Organization-Id", it.toString()) }
                             headers.set("X-Role", claims["role"]?.toString() ?: "")
-                            headers.set("X-Public-Id", claims["publicId"]?.toString() ?: "")
+                            claims["publicId"]?.let { headers.set("X-Public-Id", it.toString()) }
                             headers.set("X-Gateway-Secret", internalSecret)
                         }
                     }
