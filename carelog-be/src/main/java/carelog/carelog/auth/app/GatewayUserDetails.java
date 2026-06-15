@@ -26,16 +26,23 @@ public class GatewayUserDetails implements UserDetails, UserPrincipal {
     }
 
 
-    @Override public String getUserId() { return userId; }
-    @Override public UUID getOrganizationId() { return
-            organizationId; }
-    @Override public String getRole() { return role; }
-    @Override public UUID getPublicId() { return publicId;
-    }
+    @Override
+    public String getUserId() { return userId; }
 
-    @Override public String getUsername() { return userId;
-    }
-    @Override public String getPassword() { return null; }
+    @Override
+    public UUID getOrganizationId() { return organizationId; }
+
+    @Override
+    public String getRole() { return role; }
+
+    @Override
+    public UUID getPublicId() { return publicId; }
+
+    @Override
+    public String getUsername() { return userId; }
+
+    @Override
+    public String getPassword() { return null; }
 
 
     @Override
