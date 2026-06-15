@@ -44,11 +44,25 @@ public class GatewayHeaderAuthFilter extends OncePerRequestFilter {
         String publicId = request.getHeader("X-Public-Id");
 
         if (userId != null && !userId.isBlank()) {
+            if (organizationId == null || publicId == null) {
+                response.sendError(HttpServletResponse.SC_FORBIDDEN, "Missing required auth headers");
+                return;
+            }
+            UUID parsedOrgId;
+            UUID parsedPublicId;
+            try {
+                parsedOrgId = UUID.fromString(organizationId);
+                parsedPublicId = UUID.fromString(publicId);
+            } catch (IllegalArgumentException e) {
+                log.warn("Malformed UUID in gateway headers: organizationId={}, publicId={}", organizationId, publicId);
+                response.sendError(HttpServletResponse.SC_FORBIDDEN, "Malformed auth headers");
+                return;
+            }
             GatewayUserDetails userDetails = new GatewayUserDetails(
                     userId,
-                    UUID.fromString(organizationId),
+                    parsedOrgId,
                     role,
-                    UUID.fromString(publicId)
+                    parsedPublicId
             );
 
             // SecurityContext에 인증 정보 설정

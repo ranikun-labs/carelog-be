@@ -50,7 +50,10 @@ public class AuthController {
             @RequestHeader("Authorization") String authHeader
     ) {
         String userId = authentication.getName();
-        String accessToken = authHeader.substring("Bearer ".length());
+        if (!authHeader.startsWith("Bearer ")) {
+            return ApiResponse.noContent();
+        }
+        String accessToken = authHeader.substring(7);
         authService.logout(userId, accessToken);
         return ApiResponse.noContent();
     }
