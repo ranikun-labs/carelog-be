@@ -25,40 +25,42 @@ class UserServiceImplTest {
 
     @DisplayName("정상적 사용자 생성 요청시, 사용자 정보 저장 및 UserResponse 반환")
     @Test
-    void createUser_success() {
+    void createManager_success() {
         // given: 테스트에 필요한 요청 객체와 Mock 객체의 동작을 설정
-        ManagerCreateRequest request = ManagerCreateRequest.builder()
-                .userId("testuser")
-                .password("password123")
-                .email("test@example.com")
-                .name("Test User")
-                .role(UserRole.MANAGER) // 실제 UserRole enum 값으로 대체 필요
-                .phoneEncrypted("010-1234-5678")
-                .addressEncrypted("서울특별시 테스트")
-                .build();
+        ManagerCreateRequest request = new ManagerCreateRequest(
+                "testuser",
+                "test@example.com",
+                "password123",
+                "Test User",
+                ManagerType.PHYSICAL_THERAPIST,
+                "010-1234-5678",
+                "서울특별시 테스트"
+        );
 
         User newUser = User.builder()
                 .userId("testuser")
                 .password("encodedPassword")
                 .email("test@example.com")
+                .name("Test User")
                 .role(UserRole.MANAGER)
+                .managerType(ManagerType.PHYSICAL_THERAPIST)
                 .phoneEncrypted("010-1234-5678")
                 .addressEncrypted("서울특별시 테스트")
                 .build();
 
         // Mock 객체들의 동작 정의
-        when(userRepository.existsByUserId(request.getUserId())).thenReturn(false);
-        when(userRepository.existsByEmail(request.getEmail())).thenReturn(false);
-        when(passwordEncoder.encode(request.getPassword())).thenReturn("encodedPassword");
+        when(userRepository.existsByUserId(request.userId())).thenReturn(false);
+        when(userRepository.existsByEmail(request.email())).thenReturn(false);
+        when(passwordEncoder.encode(request.password())).thenReturn("encodedPassword");
         when(userRepository.save(any(User.class))).thenReturn(newUser);
 
         // when: 테스트 대상 메소드 호출
-        UserResponse response = userService.createUser(request);
+        UserResponse response = userService.createManager(request);
 
         // then : 결과가 예상과 일치하는지 검증
         assertThat(response).isNotNull();
-        assertThat(response.getUserId()).isEqualTo("testuser");
-        assertThat(response.getEmail()).isEqualTo("test@example.com");
+        assertThat(response.userId()).isEqualTo("testuser");
+        assertThat(response.email()).isEqualTo("test@example.com");
 
         // Mock 객체의 메소드가 예상대로 호출됬는지 검증
         verify(userRepository).existsByUserId("testuser");

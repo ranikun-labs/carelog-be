@@ -1,11 +1,19 @@
+package carelog.carelog.relation.app;
+
+import carelog.carelog.CarelogApplication;
+import carelog.carelog.PostgreSqlTestContainerConfiguration;
 import carelog.carelog.relation.app.*;
 import carelog.carelog.user.domain.*;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.*;
 import org.springframework.boot.test.context.*;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.*;
 
-@SpringBootTest
+@SpringBootTest(classes = CarelogApplication.class)
+@ActiveProfiles("test")
+@Import(PostgreSqlTestContainerConfiguration.class)
 @Transactional
 class RelationServiceImplTest {
 

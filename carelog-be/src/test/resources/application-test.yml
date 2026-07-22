@@ -1,0 +1,16 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+jwt:
+  secret-key: test-signing-key-with-at-least-thirty-two-bytes-for-hs256
+  access-token-validity: 3600000
+  refresh-token-validity: 86400000
+
+gateway:
+  internal-secret: test-gateway-internal-secret
