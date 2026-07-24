@@ -4,6 +4,7 @@ import carelog.carelog.auth.app.port.CRMIdentityClaims;
 import carelog.carelog.auth.app.port.CRMIdentityProjectionPort;
 import carelog.carelog.auth.app.port.CredentialPort;
 import carelog.carelog.auth.app.port.RefreshSession;
+import carelog.carelog.auth.app.port.TokenBlacklistPort;
 import carelog.carelog.auth.app.port.TokenSessionPort;
 import carelog.carelog.auth.web.dto.request.LoginRequest;
 import carelog.carelog.auth.web.dto.request.TokenRefreshRequest;
@@ -58,7 +59,7 @@ class AuthServiceImplCharacterizationTest {
     @Mock private CRMIdentityProjectionPort crmIdentityProjectionPort;
     @Mock private TokenSessionPort tokenSessionPort;
     @Mock private JwtTokenProvider jwtTokenProvider;
-    @Mock private RedisBlacklistService redisBlacklistService;
+    @Mock private TokenBlacklistPort tokenBlacklistPort;
 
     private AuthServiceImpl authService;
 
@@ -66,7 +67,7 @@ class AuthServiceImplCharacterizationTest {
     void setUp() {
         authService = new AuthServiceImpl(
                 credentialPort, crmIdentityProjectionPort, tokenSessionPort,
-                jwtTokenProvider, redisBlacklistService, FIXED_CLOCK
+                jwtTokenProvider, tokenBlacklistPort, FIXED_CLOCK
         );
     }
 
@@ -269,8 +270,8 @@ class AuthServiceImplCharacterizationTest {
 
         authService.logout(USER_ID, accessToken);
 
-        InOrder inOrder = inOrder(redisBlacklistService, tokenSessionPort);
-        inOrder.verify(redisBlacklistService).addToBlacklist(accessToken, ttl);
+        InOrder inOrder = inOrder(tokenBlacklistPort, tokenSessionPort);
+        inOrder.verify(tokenBlacklistPort).addToBlacklist(accessToken, ttl);
         inOrder.verify(tokenSessionPort).deleteForUser(USER_ID);
     }
 
@@ -282,7 +283,7 @@ class AuthServiceImplCharacterizationTest {
         Duration ttl = Duration.ofMinutes(5);
         when(jwtTokenProvider.getRemainingValidity(accessToken)).thenReturn(ttl);
         doThrow(new RuntimeException("redis down"))
-                .when(redisBlacklistService).addToBlacklist(accessToken, ttl);
+                .when(tokenBlacklistPort).addToBlacklist(accessToken, ttl);
 
         assertThatThrownBy(() -> authService.logout(USER_ID, accessToken))
                 .isInstanceOf(RuntimeException.class)

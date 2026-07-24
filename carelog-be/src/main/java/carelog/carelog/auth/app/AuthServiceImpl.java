@@ -22,7 +22,7 @@ public class AuthServiceImpl implements AuthService {
     private final CRMIdentityProjectionPort crmIdentityProjectionPort;
     private final TokenSessionPort tokenSessionPort;
     private final JwtTokenProvider jwtTokenProvider;
-    private final RedisBlacklistService redisBlacklistService;
+    private final TokenBlacklistPort tokenBlacklistPort;
     private final Clock clock;
 
 
@@ -56,7 +56,7 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public void logout(String userId, String accessToken) {
         Duration ttl = jwtTokenProvider.getRemainingValidity(accessToken);
-        redisBlacklistService.addToBlacklist(accessToken, ttl);
+        tokenBlacklistPort.addToBlacklist(accessToken, ttl);
 
         // Refresh Session 삭제 (blacklist → delete 순서 보존)
         tokenSessionPort.deleteForUser(userId);

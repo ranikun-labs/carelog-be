@@ -1,4 +1,4 @@
-package carelog.carelog.auth.app;
+package carelog.carelog.auth.app.adapter;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -15,20 +15,22 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * RedisBlacklistService의 현재 key/value/TTL 계약을 고정하는 Characterization Test.
+ * RedisTokenBlacklistAdapter의 현재 key/value/TTL 계약을 고정하는 Characterization Test.
+ *
+ * <p>TokenBlacklistPort 분리 전 {@code RedisBlacklistService}가 보장하던 Redis 저장 계약을 그대로 승계한다.
  * Phase 1A: docs/context/identity/auth-extraction-audit.md 기준.
  */
 @ExtendWith(MockitoExtension.class)
-class RedisBlacklistServiceCharacterizationTest {
+class RedisTokenBlacklistAdapterCharacterizationTest {
 
     @Mock private StringRedisTemplate redisTemplate;
     @Mock private ValueOperations<String, String> valueOperations;
 
-    private RedisBlacklistService redisBlacklistService;
+    private RedisTokenBlacklistAdapter adapter;
 
     @BeforeEach
     void setUp() {
-        redisBlacklistService = new RedisBlacklistService(redisTemplate);
+        adapter = new RedisTokenBlacklistAdapter(redisTemplate);
     }
 
     // 6.1 Raw Token blacklist 저장
@@ -40,7 +42,7 @@ class RedisBlacklistServiceCharacterizationTest {
         String rawToken = "raw-access-token";
         Duration ttl = Duration.ofMinutes(10);
 
-        redisBlacklistService.addToBlacklist(rawToken, ttl);
+        adapter.addToBlacklist(rawToken, ttl);
 
         verify(valueOperations).set("blacklist:raw-access-token", "1", ttl);
     }
