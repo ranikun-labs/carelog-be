@@ -84,9 +84,9 @@ class LegacyTokenSessionAdapterTest {
         assertThat(adapter.findByToken("missing-token")).isEmpty();
     }
 
-    @DisplayName("rotate는 Entity를 다시 조회해 dirty-checking으로 토큰/만료시각을 갱신한다")
+    @DisplayName("rotate는 Entity를 다시 조회해 토큰/만료시각을 갱신하고 별도 save를 호출하지 않는다")
     @Test
-    void rotate_mutatesReloadedEntityViaDirtyChecking() {
+    void rotate_updatesReloadedEntity() {
         OffsetDateTime oldExpiry = OffsetDateTime.parse("2026-08-01T00:00:00Z");
         OffsetDateTime newExpiry = OffsetDateTime.parse("2026-08-15T00:00:00Z");
         RefreshToken entity = newRefreshToken(USER_ID, "old-token", oldExpiry);
