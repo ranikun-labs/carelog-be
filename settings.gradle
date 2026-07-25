@@ -1,1 +1,4 @@
 rootProject.name = 'carelog'
+
+include 'carelog-be'
+include 'carelog-gateway'   // Phase 2에서 주석 해제
