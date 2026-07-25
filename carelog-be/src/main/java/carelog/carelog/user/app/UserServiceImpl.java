@@ -2,6 +2,8 @@ package carelog.carelog.user.app;
 
 import carelog.carelog.auth.app.UserPrincipal;
 import carelog.carelog.common.web.exception.*;
+import carelog.carelog.identity.app.port.IdentityAccount;
+import carelog.carelog.identity.app.port.IdentityAccountRegistrationPort;
 import carelog.carelog.user.domain.*;
 import carelog.carelog.user.web.dto.*;
 import lombok.*;
@@ -19,6 +21,7 @@ public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final IdentityAccountRegistrationPort identityAccountRegistrationPort;
 
     private User findUserEntityByPublicId(UUID publicId) {
         return userRepository.findByPublicId(publicId)
@@ -28,6 +31,8 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public UserResponse createManager(ManagerCreateRequest request) {
+        // Carelog Enrollment Coordinator: CRM(email) 중복 확인 → Identity Account Registration →
+        // Carelog Enrollment Projection(User 행 생성 + accountId 연결). 단일 로컬 Transaction.
         if (userRepository.existsByUserId(request.userId())) {
             throw new CustomException(ExceptionStatus.DUPLICATE_USER_ID);
         }
@@ -35,9 +40,14 @@ public class UserServiceImpl implements UserService {
             throw new CustomException(ExceptionStatus.DUPLICATE_EMAIL);
         }
 
+        IdentityAccount account = identityAccountRegistrationPort.registerPasswordAccount(
+                request.userId(), request.email(), request.password());
+
         User newUser = User.builder()
                 .userId(request.userId())
-                .password(passwordEncoder.encode(request.password()))
+                // Legacy 호환 미러: 인증에는 더 이상 사용하지 않는다(password_credentials가 유일 소스).
+                // Identity Registration이 이미 계산한 해시를 재사용해 이중 인코딩을 피한다.
+                .password(account.encodedPasswordHash())
                 .email(request.email())
                 .name(request.name())
                 .role(UserRole.MANAGER)
@@ -47,6 +57,9 @@ public class UserServiceImpl implements UserService {
                 .build();
 
         newUser.assignOrganization(UUID.randomUUID());
+        // Backfill(V3)이 기존 MANAGER에서 보존한 accountId == publicId 불변식을 신규 가입에도 유지한다.
+        newUser.assignPublicId(account.accountId());
+        newUser.assignAccountId(account.accountId());
         User savedUser = userRepository.save(newUser);
         return UserResponse.from(savedUser);
     }
