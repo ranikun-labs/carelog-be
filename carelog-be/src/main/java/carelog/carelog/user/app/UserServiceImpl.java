@@ -4,6 +4,8 @@ import carelog.carelog.auth.app.UserPrincipal;
 import carelog.carelog.common.web.exception.*;
 import carelog.carelog.identity.app.port.IdentityAccount;
 import carelog.carelog.identity.app.port.IdentityAccountRegistrationPort;
+import carelog.carelog.identity.app.port.PasswordCredentialUpdatePort;
+import carelog.carelog.identity.app.port.UpdatedPasswordCredential;
 import carelog.carelog.user.domain.*;
 import carelog.carelog.user.web.dto.*;
 import lombok.*;
@@ -22,6 +24,7 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final IdentityAccountRegistrationPort identityAccountRegistrationPort;
+    private final PasswordCredentialUpdatePort passwordCredentialUpdatePort;
 
     private User findUserEntityByPublicId(UUID publicId) {
         return userRepository.findByPublicId(publicId)
@@ -97,7 +100,18 @@ public class UserServiceImpl implements UserService {
         User user = findUserEntityByPublicId(publicId);
 
         if (request.password() != null && !request.password().isBlank()) {
-            user.updatePassword(passwordEncoder.encode(request.password()));
+            if (user.getAccountId() != null) {
+                // Identity Principal(MANAGER): Credential 정본을 먼저 갱신하고, 같은 해시를
+                // Legacy Mirror(users.password)에 재사용한다(이중 인코딩 없음). 실패 시 이 Transaction
+                // 전체가 Rollback되어 users.password만 바뀌고 Credential은 그대로인 상태가 나오지 않는다.
+                UpdatedPasswordCredential updated =
+                        passwordCredentialUpdatePort.updatePassword(user.getAccountId(), request.password());
+                user.updatePassword(updated.encodedPassword());
+            } else {
+                // accountId가 없는 행(CUSTOMER 등)은 Identity Principal이 아니다 — Credential을
+                // 새로 만들지 않고 기존 계약대로 Legacy 컬럼만 갱신한다.
+                user.updatePassword(passwordEncoder.encode(request.password()));
+            }
         }
         if (request.phoneEncrypted() != null) {
             user.updatePhoneEncrypted(request.phoneEncrypted());

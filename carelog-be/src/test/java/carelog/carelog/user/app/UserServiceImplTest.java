@@ -4,6 +4,8 @@ import carelog.carelog.common.web.exception.CustomException;
 import carelog.carelog.common.web.exception.ExceptionStatus;
 import carelog.carelog.identity.app.port.IdentityAccount;
 import carelog.carelog.identity.app.port.IdentityAccountRegistrationPort;
+import carelog.carelog.identity.app.port.PasswordCredentialUpdatePort;
+import carelog.carelog.identity.app.port.UpdatedPasswordCredential;
 import carelog.carelog.user.domain.*;
 import carelog.carelog.user.web.dto.*;
 import org.junit.jupiter.api.*;
@@ -35,6 +37,9 @@ class UserServiceImplTest {
 
     @Mock
     private IdentityAccountRegistrationPort identityAccountRegistrationPort;
+
+    @Mock
+    private PasswordCredentialUpdatePort passwordCredentialUpdatePort;
 
     @InjectMocks
     private UserServiceImpl userService;
@@ -152,5 +157,82 @@ class UserServiceImplTest {
                 .hasFieldOrPropertyWithValue("exceptionStatus", ExceptionStatus.DUPLICATE_USER_ID);
 
         verify(userRepository, never()).save(any());
+    }
+
+    private User newManagerWithAccount(UUID accountId) {
+        User user = User.builder()
+                .userId("manager1")
+                .password("legacy-mirror-hash")
+                .email("manager1@example.com")
+                .name("Manager One")
+                .role(UserRole.MANAGER)
+                .managerType(ManagerType.PHYSICAL_THERAPIST)
+                .build();
+        user.assignAccountId(accountId);
+        return user;
+    }
+
+    private User newCustomerWithoutAccount() {
+        return User.builder()
+                .name("Customer One")
+                .role(UserRole.CUSTOMER)
+                .build();
+    }
+
+    @DisplayName("accountId가 있는 User(MANAGER)의 비밀번호 변경은 PasswordCredentialUpdatePort로 Credential을 " +
+            "먼저 갱신하고, 같은 해시를 Legacy Mirror(users.password)에 재사용한다(재인코딩 없음)")
+    @Test
+    void updateUser_managerWithAccount_updatesCredentialThenMirrorsSameHash() {
+        UUID accountId = UUID.randomUUID();
+        User manager = newManagerWithAccount(accountId);
+        when(userRepository.findByPublicId(manager.getPublicId())).thenReturn(java.util.Optional.of(manager));
+        when(passwordCredentialUpdatePort.updatePassword(accountId, "newPassword123"))
+                .thenReturn(new UpdatedPasswordCredential("new-encoded-hash"));
+
+        UserUpdateRequest request = new UserUpdateRequest("newPassword123", null, null);
+        userService.updateUser(manager.getPublicId(), request);
+
+        verify(passwordCredentialUpdatePort).updatePassword(accountId, "newPassword123");
+        // Legacy Mirror는 Port가 반환한 해시를 그대로 재사용한다 — passwordEncoder.encode를 직접 호출하지 않는다.
+        verify(passwordEncoder, never()).encode(any());
+        assertThat(manager.getPassword()).isEqualTo("new-encoded-hash");
+    }
+
+    @DisplayName("accountId가 없는 User(CUSTOMER)의 비밀번호 변경 요청은 Credential Port를 호출하지 않고 " +
+            "기존 계약대로 Legacy 컬럼만 passwordEncoder로 직접 갱신한다")
+    @Test
+    void updateUser_customerWithoutAccount_neverTouchesIdentityCredential() {
+        User customer = newCustomerWithoutAccount();
+        when(userRepository.findByPublicId(customer.getPublicId())).thenReturn(java.util.Optional.of(customer));
+        when(passwordEncoder.encode("newPassword123")).thenReturn("legacy-only-hash");
+
+        UserUpdateRequest request = new UserUpdateRequest("newPassword123", null, null);
+        userService.updateUser(customer.getPublicId(), request);
+
+        verifyNoInteractions(passwordCredentialUpdatePort);
+        verify(passwordEncoder).encode("newPassword123");
+        assertThat(customer.getPassword()).isEqualTo("legacy-only-hash");
+        assertThat(customer.getAccountId()).isNull();
+    }
+
+    @DisplayName("Identity Credential 갱신이 실패하면 예외가 그대로 전파되고 users.password는 변경되지 않는다")
+    @Test
+    void updateUser_credentialUpdateFailure_propagatesWithoutMirroringPassword() {
+        UUID accountId = UUID.randomUUID();
+        User manager = newManagerWithAccount(accountId);
+        String originalPassword = manager.getPassword();
+        when(userRepository.findByPublicId(manager.getPublicId())).thenReturn(java.util.Optional.of(manager));
+        when(passwordCredentialUpdatePort.updatePassword(any(), any()))
+                .thenThrow(new CustomException(ExceptionStatus.USER_NOT_FOUND));
+
+        UserUpdateRequest request = new UserUpdateRequest("newPassword123", null, null);
+
+        assertThatThrownBy(() -> userService.updateUser(manager.getPublicId(), request))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("exceptionStatus", ExceptionStatus.USER_NOT_FOUND);
+
+        // Port 호출이 예외를 던졌으므로 users.password 미러 갱신 라인에 도달하지 않는다(같은 @Transactional
+        // 메서드 안이므로 실제 DB 반영은 어차피 Rollback되지만, 여기서는 호출 자체가 없었음을 고정한다).
+        assertThat(manager.getPassword()).isEqualTo(originalPassword);
     }
 }

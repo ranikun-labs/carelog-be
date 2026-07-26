@@ -49,4 +49,8 @@ public class PasswordCredential {
     public static PasswordCredential create(UUID accountId, String loginId, String passwordHash) {
         return new PasswordCredential(accountId, loginId, passwordHash);
     }
+
+    public void updatePasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
+    }
 }

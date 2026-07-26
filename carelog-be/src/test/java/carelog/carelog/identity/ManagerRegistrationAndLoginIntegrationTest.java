@@ -7,6 +7,7 @@ import carelog.carelog.auth.app.JwtTokenProvider;
 import carelog.carelog.auth.web.dto.request.LoginRequest;
 import carelog.carelog.auth.web.dto.response.LoginResponse;
 import carelog.carelog.common.web.exception.CustomException;
+import carelog.carelog.identity.domain.PasswordCredential;
 import carelog.carelog.identity.domain.PasswordCredentialRepository;
 import carelog.carelog.identity.domain.PlatformAccountRepository;
 import carelog.carelog.user.domain.ManagerType;
@@ -16,6 +17,7 @@ import carelog.carelog.user.domain.UserRole;
 import carelog.carelog.user.web.dto.CustomerCreateRequest;
 import carelog.carelog.user.web.dto.ManagerCreateRequest;
 import carelog.carelog.user.web.dto.UserResponse;
+import carelog.carelog.user.web.dto.UserUpdateRequest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -123,6 +125,75 @@ class ManagerRegistrationAndLoginIntegrationTest {
             assertThat(customer.role()).isEqualTo(UserRole.CUSTOMER);
             User savedCustomer = userRepository.findByPublicId(customer.publicId()).orElseThrow();
             assertThat(savedCustomer.getAccountId()).isNull();
+        }
+    }
+
+    @Nested
+    @Transactional
+    class PasswordChange {
+
+        @DisplayName("매니저가 비밀번호를 바꾸면 새 비밀번호로만 로그인되고, users.password와 " +
+                "password_credentials.password_hash가 동일 Hash를 갖는다(평문은 어디에도 없음)")
+        @Test
+        void changePassword_managerCanLoginWithNewPasswordOnly_andHashesStayInSync() throws InterruptedException {
+            String userId = "it-pwchange-" + UUID.randomUUID().toString().substring(0, 8);
+            ManagerCreateRequest request = new ManagerCreateRequest(
+                    userId, userId + "@example.com", "oldPassword123!", "비밀번호변경테스트",
+                    ManagerType.PHYSICAL_THERAPIST, null, null);
+            UserResponse created = userService.createManager(request);
+
+            // 기존 비밀번호 로그인 성공 확인(변경 전 baseline)
+            assertThat(authService.login(new LoginRequest(userId, "oldPassword123!")).accessToken()).isNotBlank();
+
+            userService.updateUser(created.publicId(), new UserUpdateRequest("newPassword456!", null, null));
+
+            // JWT는 초 단위 iat/exp를 담으므로, 같은 초 안에 재로그인하면 이전 로그인과 완전히 동일한 토큰
+            // 문자열이 나와 refresh_token unique 제약과 충돌할 수 있다(테스트 타이밍 artifact) — 초 경계를
+            // 넘겨 서로 다른 iat를 보장한다. 프로덕션 재현성과 무관.
+            Thread.sleep(1100);
+
+            // 새 비밀번호 로그인 성공
+            assertThat(authService.login(new LoginRequest(userId, "newPassword456!")).accessToken()).isNotBlank();
+            // 이전 비밀번호는 더 이상 로그인되지 않는다
+            assertThatThrownBy(() -> authService.login(new LoginRequest(userId, "oldPassword123!")))
+                    .isInstanceOf(CustomException.class);
+
+            User updated = userRepository.findByUserId(userId).orElseThrow();
+            PasswordCredential credential = passwordCredentialRepository.findById(updated.getAccountId()).orElseThrow();
+
+            // users.password(Legacy Mirror) == password_credentials.password_hash(정본) — 같은 해시.
+            assertThat(updated.getPassword()).isEqualTo(credential.getPasswordHash());
+            // 평문 비밀번호가 어느 컬럼에도 그대로 저장되지 않았다(BCrypt 해시 형식).
+            assertThat(updated.getPassword()).isNotEqualTo("newPassword456!");
+            assertThat(credential.getPasswordHash()).isNotEqualTo("newPassword456!");
+            assertThat(credential.getPasswordHash()).startsWith("$2");
+        }
+
+        @DisplayName("Customer 비밀번호 변경 요청은 Credential을 생성하지 않고 accountId는 계속 null이다")
+        @Test
+        void changePassword_customerNeverCreatesCredential() {
+            String managerId = "it-pwchange-mgr-" + UUID.randomUUID().toString().substring(0, 8);
+            ManagerCreateRequest managerRequest = new ManagerCreateRequest(
+                    managerId, managerId + "@example.com", "password123!", "매니저",
+                    ManagerType.PHYSICAL_THERAPIST, null, null);
+            userService.createManager(managerRequest);
+            User manager = userRepository.findByUserId(managerId).orElseThrow();
+
+            carelog.carelog.auth.app.UserPrincipal principal = new carelog.carelog.auth.app.UserPrincipal() {
+                @Override public String getUserId() { return manager.getUserId(); }
+                @Override public UUID getOrganizationId() { return manager.getOrganizationId(); }
+                @Override public String getRole() { return manager.getRole().name(); }
+                @Override public UUID getPublicId() { return manager.getPublicId(); }
+            };
+            UserResponse customer = userService.createCustomer(new CustomerCreateRequest("고객"), principal);
+
+            long credentialCountBefore = passwordCredentialRepository.count();
+
+            userService.updateUser(customer.publicId(), new UserUpdateRequest("someNewPassword1", null, null));
+
+            User updatedCustomer = userRepository.findByPublicId(customer.publicId()).orElseThrow();
+            assertThat(updatedCustomer.getAccountId()).isNull();
+            assertThat(passwordCredentialRepository.count()).isEqualTo(credentialCountBefore);
         }
     }
 }
