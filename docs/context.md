@@ -1,6 +1,9 @@
-# 현재 작업 컨텍스트
+# 작업 컨텍스트 아카이브 (설계 결정 원본)
 
-> 최종 업데이트: 2026-03-19
+> ⚠️ 현재 진행 작업 컨텍스트는 `docs/context/<브랜치>/` 하위로 이동.
+> → Step 3: [`docs/context/scg-monorepo/carelog-be.md`](context/scg-monorepo/carelog-be.md)
+
+> 최종 업데이트: 2026-03-19 (아카이브)
 
 ---
 
