@@ -168,6 +168,10 @@ journals (코어 — 도메인 무관)
 
 ## 5. Auth 아키텍처 — 멀티 비즈니스 서버 대비 (v0.2 신설)
 
+### Backend Service Foundation 참조
+
+Carelog의 상위 MSA 공통 기준은 `docs/foundation/foundation-context.md`에서 pin하여 참조한다. Shared Identity는 Foundation의 canonical 논리 서비스명이지만, 현재 Carelog는 내부 Identity Boundary 구현 상태이며 물리 서비스 분리는 시작하지 않았다. 실제 OAuth Provider와 Account Linking은 미구현이고, Foundation 기술 문서는 Draft이므로 현재 Runtime 지원을 의미하지 않는다.
+
 ### 목표 구조
 
 ```text

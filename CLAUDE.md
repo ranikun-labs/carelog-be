@@ -63,3 +63,8 @@
 - 논리 삭제: `deletedAt` 필드
 - 멀티테넌트: `TenantContext` + `TenantAspect`
 - 코드 주석은 한글로
+
+## Foundation 읽기 순서
+- Backend Architecture, Identity, 서비스 경계, DB 소유권, 서비스 통신, 분산 정합성, Token/Event Contract 변경 전 `docs/foundation/foundation-context.md`를 먼저 읽는다.
+- Foundation의 Draft 미래 계약과 현재 Carelog Runtime을 구분하고, 실제 지원 여부는 코드·Migration·테스트로 확인한다.
+- CUSTOMER를 Identity Principal로 해석하거나 Account 대상으로 Backfill하지 않는다.
