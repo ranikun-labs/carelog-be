@@ -1,8 +1,13 @@
-# 현재 작업 컨텍스트
+# 작업 컨텍스트 아카이브 (설계 결정 원본)
 
-> 최종 업데이트: 2026-03-19
+> ⚠️ 현재 진행 작업 컨텍스트는 `docs/context/<브랜치>/` 하위로 이동.
+> → Step 3: [`docs/context/scg-monorepo/carelog-be.md`](context/scg-monorepo/carelog-be.md)
+
+> 최종 업데이트: 2026-03-19 (아카이브)
 
 ---
+
+> **현재 상태 (2026-07)**: PR #27에서 Flyway V1~V4를 도입했고 Hibernate `ddl-auto`를 `validate`로 전환했다. 아래 본문은 작성 당시 상태를 보존한 아카이브 기록이다.
 
 
 ## 📁 문서 목록
