@@ -8,11 +8,18 @@ spring:
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     open-in-view: false
     properties:
       hibernate:
         default_batch_fetch_size: 100
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    # 신규 빈 DB는 V1부터 그대로 실행된다. 예상 못한 비어있지 않은 DB를 자동으로 V1 기준선 취급하지
+    # 않도록 기본값은 false — 기존 운영/개발 DB를 유지해야 하는 환경에서만 명시적으로 opt-in한다.
+    baseline-on-migrate: ${FLYWAY_BASELINE_ON_MIGRATE:false}
+    baseline-version: ${FLYWAY_BASELINE_VERSION:1}
   data:
     redis:
       host: ${REDIS_HOST}

@@ -59,6 +59,10 @@ public class User extends TenantBaseEntity {
     @Column(name = "deleted_at")
     private OffsetDateTime deletedAt;
 
+    // Identity Foundation: 로그인 가능한 MANAGER만 연결(nullable). CUSTOMER는 Platform Account가 아니다.
+    @Column(name = "account_id")
+    private UUID accountId;
+
     @Builder
     public User(
             String userId, String email, String password, String name,
@@ -95,5 +99,19 @@ public class User extends TenantBaseEntity {
 
     public void updateAddressEncrypted(String addressEncrypted) {
         this.addressEncrypted = addressEncrypted;
+    }
+
+    public void assignAccountId(UUID accountId) {
+        this.accountId = accountId;
+    }
+
+    /**
+     * Identity Account 등록 결과와 publicId를 일치시킨다(MANAGER 전용, 신규 가입 경로에서 사용).
+     * Backfill(V3)이 기존 MANAGER의 publicId를 platform_accounts.id로 그대로 승계한 것과 동일한
+     * 불변식 — accountId == publicId — 을 신규 가입에도 유지하기 위함이다. updatable=false는
+     * 이후 UPDATE만 막을 뿐, 이 메서드가 save() 이전(INSERT 전)에 호출되는 한 안전하다.
+     */
+    public void assignPublicId(UUID publicId) {
+        this.publicId = publicId;
     }
 }
