@@ -43,16 +43,18 @@ class IdentityCredentialAdapterTest {
     @DisplayName("password_credentials 검증 성공 시 CRMIdentityProjectionPort claim으로 UserPrincipal을 구성한다")
     @Test
     void authenticate_success_buildsPrincipalFromPasswordCredentialAndCrmProjection() {
+        UUID accountId = UUID.randomUUID();
         PasswordCredential credential = PasswordCredential.create(
-                UUID.randomUUID(), "manager@example.com", "encoded-hash");
+                accountId, "manager@example.com", "encoded-hash");
         when(passwordCredentialRepository.findByLoginId("manager@example.com"))
                 .thenReturn(Optional.of(credential));
         when(passwordEncoder.matches("raw-password", "encoded-hash")).thenReturn(true);
-        when(crmIdentityProjectionPort.getIdentityClaims("manager@example.com"))
+        when(crmIdentityProjectionPort.getIdentityClaims(accountId))
                 .thenReturn(new CRMIdentityClaims(ORGANIZATION_ID, "MANAGER", PUBLIC_ID));
 
         UserPrincipal result = adapter.authenticate("manager@example.com", "raw-password");
 
+        assertThat(result.getAccountId()).isEqualTo(accountId);
         assertThat(result.getUserId()).isEqualTo("manager@example.com");
         assertThat(result.getOrganizationId()).isEqualTo(ORGANIZATION_ID);
         assertThat(result.getRole()).isEqualTo("MANAGER");

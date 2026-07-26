@@ -81,7 +81,8 @@ class ManagerRegistrationAndLoginIntegrationTest {
             LoginResponse loginResponse = authService.login(new LoginRequest(userId, "password123!"));
 
             assertThat(loginResponse.accessToken()).isNotBlank();
-            assertThat(jwtTokenProvider.getUserIdFromToken(loginResponse.accessToken())).isEqualTo(userId);
+            assertThat(jwtTokenProvider.getAccountIdFromToken(loginResponse.accessToken()))
+                    .isEqualTo(savedUser.getAccountId());
             assertThat(jwtTokenProvider.getOrganizationIdFromToken(loginResponse.accessToken()))
                     .isEqualTo(savedUser.getOrganizationId());
             assertThat(jwtTokenProvider.getRoleFromToken(loginResponse.accessToken()))
@@ -114,6 +115,7 @@ class ManagerRegistrationAndLoginIntegrationTest {
             User manager = userRepository.findByUserId(managerId).orElseThrow();
 
             carelog.carelog.auth.app.UserPrincipal principal = new carelog.carelog.auth.app.UserPrincipal() {
+                @Override public UUID getAccountId() { return manager.getAccountId(); }
                 @Override public String getUserId() { return manager.getUserId(); }
                 @Override public UUID getOrganizationId() { return manager.getOrganizationId(); }
                 @Override public String getRole() { return manager.getRole().name(); }
@@ -180,6 +182,7 @@ class ManagerRegistrationAndLoginIntegrationTest {
             User manager = userRepository.findByUserId(managerId).orElseThrow();
 
             carelog.carelog.auth.app.UserPrincipal principal = new carelog.carelog.auth.app.UserPrincipal() {
+                @Override public UUID getAccountId() { return manager.getAccountId(); }
                 @Override public String getUserId() { return manager.getUserId(); }
                 @Override public UUID getOrganizationId() { return manager.getOrganizationId(); }
                 @Override public String getRole() { return manager.getRole().name(); }

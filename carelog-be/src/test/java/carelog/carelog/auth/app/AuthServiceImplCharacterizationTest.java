@@ -49,6 +49,7 @@ class AuthServiceImplCharacterizationTest {
 
     private static final Clock FIXED_CLOCK =
             Clock.fixed(Instant.parse("2026-07-20T00:00:00Z"), ZoneOffset.UTC);
+    private static final UUID ACCOUNT_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
     private static final String USER_ID = "manager@example.com";
     private static final UUID ORGANIZATION_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID PUBLIC_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
@@ -71,8 +72,9 @@ class AuthServiceImplCharacterizationTest {
         );
     }
 
-    private UserPrincipal principal(String userId, UUID organizationId, String role, UUID publicId) {
+    private UserPrincipal principal(UUID accountId, String userId, UUID organizationId, String role, UUID publicId) {
         return new UserPrincipal() {
+            @Override public UUID getAccountId() { return accountId; }
             @Override public String getUserId() { return userId; }
             @Override public UUID getOrganizationId() { return organizationId; }
             @Override public String getRole() { return role; }
@@ -80,8 +82,8 @@ class AuthServiceImplCharacterizationTest {
         };
     }
 
-    private RefreshSession newSession(String userId, String token, OffsetDateTime expiresAt) {
-        return new RefreshSession(token, userId, expiresAt);
+    private RefreshSession newSession(UUID accountId, String token, OffsetDateTime expiresAt) {
+        return new RefreshSession(token, accountId, expiresAt);
     }
 
     // 5.1 로그인 성공
@@ -89,12 +91,12 @@ class AuthServiceImplCharacterizationTest {
     @Test
     void login_success_authenticatesThenIssuesTokensThenReplacesSession() {
         LoginRequest request = new LoginRequest(USER_ID, "raw-password");
-        UserPrincipal userPrincipal = principal(USER_ID, ORGANIZATION_ID, ROLE, PUBLIC_ID);
+        UserPrincipal userPrincipal = principal(ACCOUNT_ID, USER_ID, ORGANIZATION_ID, ROLE, PUBLIC_ID);
 
         when(credentialPort.authenticate(USER_ID, "raw-password")).thenReturn(userPrincipal);
-        when(jwtTokenProvider.generateAccessToken(USER_ID, ORGANIZATION_ID, ROLE, PUBLIC_ID))
+        when(jwtTokenProvider.generateAccessToken(ACCOUNT_ID, ORGANIZATION_ID, ROLE, PUBLIC_ID))
                 .thenReturn("access-token");
-        when(jwtTokenProvider.generateRefreshToken(USER_ID)).thenReturn("refresh-token");
+        when(jwtTokenProvider.generateRefreshToken(ACCOUNT_ID)).thenReturn("refresh-token");
         OffsetDateTime newExpiry = OffsetDateTime.now(FIXED_CLOCK).plusDays(14);
         when(jwtTokenProvider.getRefreshTokenExpiryDate()).thenReturn(newExpiry);
 
@@ -106,9 +108,9 @@ class AuthServiceImplCharacterizationTest {
         // 인증 → Access/Refresh 생성 → Session 교체 순서 보존
         InOrder inOrder = inOrder(credentialPort, jwtTokenProvider, tokenSessionPort);
         inOrder.verify(credentialPort).authenticate(USER_ID, "raw-password");
-        inOrder.verify(jwtTokenProvider).generateAccessToken(USER_ID, ORGANIZATION_ID, ROLE, PUBLIC_ID);
-        inOrder.verify(jwtTokenProvider).generateRefreshToken(USER_ID);
-        inOrder.verify(tokenSessionPort).replaceForUser(USER_ID, "refresh-token", newExpiry);
+        inOrder.verify(jwtTokenProvider).generateAccessToken(ACCOUNT_ID, ORGANIZATION_ID, ROLE, PUBLIC_ID);
+        inOrder.verify(jwtTokenProvider).generateRefreshToken(ACCOUNT_ID);
+        inOrder.verify(tokenSessionPort).replaceForAccount(ACCOUNT_ID, "refresh-token", newExpiry);
 
         verifyNoInteractions(crmIdentityProjectionPort);
     }
@@ -127,7 +129,7 @@ class AuthServiceImplCharacterizationTest {
 
         verifyNoInteractions(jwtTokenProvider);
         verifyNoInteractions(crmIdentityProjectionPort);
-        verify(tokenSessionPort, never()).replaceForUser(anyString(), anyString(), any());
+        verify(tokenSessionPort, never()).replaceForAccount(any(), anyString(), any());
     }
 
     // 5.3 유효하지 않은 JWT Refresh Token
@@ -148,6 +150,26 @@ class AuthServiceImplCharacterizationTest {
         verify(jwtTokenProvider, never()).generateRefreshToken(any());
     }
 
+    // 5.3b subject가 UUID가 아닌 legacy Refresh Token (cut-over 이전 loginId subject)
+    @DisplayName("subject가 accountId(UUID) 형식이 아니면 Session 조회 전에 INVALID_REFRESH_TOKEN을 던진다")
+    @Test
+    void refresh_nonUuidSubject_throwsInvalidRefreshTokenBeforeSessionLookup() {
+        String refreshToken = "legacy-refresh-token";
+        TokenRefreshRequest request = new TokenRefreshRequest(refreshToken);
+        when(jwtTokenProvider.validateToken(refreshToken)).thenReturn(true);
+        when(jwtTokenProvider.getAccountIdFromToken(refreshToken))
+                .thenThrow(new IllegalArgumentException("Invalid UUID string: manager@example.com"));
+
+        assertThatThrownBy(() -> authService.refreshToken(request))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("exceptionStatus", ExceptionStatus.INVALID_REFRESH_TOKEN);
+
+        verifyNoInteractions(tokenSessionPort);
+        verifyNoInteractions(crmIdentityProjectionPort);
+        verify(jwtTokenProvider, never()).generateAccessToken(any(), any(), any(), any());
+        verify(jwtTokenProvider, never()).generateRefreshToken(any());
+    }
+
     // 5.4 저장된 Session 없음
     @DisplayName("JWT는 유효하지만 저장된 Session이 없으면 REFRESH_TOKEN_NOT_FOUND를 던진다")
     @Test
@@ -155,7 +177,7 @@ class AuthServiceImplCharacterizationTest {
         String refreshToken = "refresh-token";
         TokenRefreshRequest request = new TokenRefreshRequest(refreshToken);
         when(jwtTokenProvider.validateToken(refreshToken)).thenReturn(true);
-        when(jwtTokenProvider.getUserIdFromToken(refreshToken)).thenReturn(USER_ID);
+        when(jwtTokenProvider.getAccountIdFromToken(refreshToken)).thenReturn(ACCOUNT_ID);
         when(tokenSessionPort.findByToken(refreshToken)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> authService.refreshToken(request))
@@ -175,10 +197,10 @@ class AuthServiceImplCharacterizationTest {
     void refresh_expiredPersistedSession_deletesItThenThrowsExpired() {
         String refreshToken = "refresh-token";
         TokenRefreshRequest request = new TokenRefreshRequest(refreshToken);
-        RefreshSession session = newSession(USER_ID, refreshToken, OffsetDateTime.now(FIXED_CLOCK).minusSeconds(1));
+        RefreshSession session = newSession(ACCOUNT_ID, refreshToken, OffsetDateTime.now(FIXED_CLOCK).minusSeconds(1));
 
         when(jwtTokenProvider.validateToken(refreshToken)).thenReturn(true);
-        when(jwtTokenProvider.getUserIdFromToken(refreshToken)).thenReturn(USER_ID);
+        when(jwtTokenProvider.getAccountIdFromToken(refreshToken)).thenReturn(ACCOUNT_ID);
         when(tokenSessionPort.findByToken(refreshToken)).thenReturn(Optional.of(session));
 
         assertThatThrownBy(() -> authService.refreshToken(request))
@@ -194,17 +216,18 @@ class AuthServiceImplCharacterizationTest {
     }
 
     // 5.6 JWT subject와 저장 사용자 불일치
-    @DisplayName("JWT subject와 저장된 Session의 userId가 다르면 CRM claim 조회 없이 INVALID_REFRESH_TOKEN을 던진다")
+    @DisplayName("JWT subject와 저장된 Session의 accountId가 다르면 CRM claim 조회 없이 INVALID_REFRESH_TOKEN을 던진다")
     @Test
     void refresh_subjectMismatch_throwsInvalidRefreshTokenWithoutClaimLookup() {
         String refreshToken = "refresh-token";
         TokenRefreshRequest request = new TokenRefreshRequest(refreshToken);
+        UUID otherAccountId = UUID.fromString("44444444-4444-4444-4444-444444444444");
         RefreshSession session = newSession(
-                "other-user@example.com", refreshToken, OffsetDateTime.now(FIXED_CLOCK).plusDays(1)
+                otherAccountId, refreshToken, OffsetDateTime.now(FIXED_CLOCK).plusDays(1)
         );
 
         when(jwtTokenProvider.validateToken(refreshToken)).thenReturn(true);
-        when(jwtTokenProvider.getUserIdFromToken(refreshToken)).thenReturn(USER_ID);
+        when(jwtTokenProvider.getAccountIdFromToken(refreshToken)).thenReturn(ACCOUNT_ID);
         when(tokenSessionPort.findByToken(refreshToken)).thenReturn(Optional.of(session));
 
         assertThatThrownBy(() -> authService.refreshToken(request))
@@ -225,16 +248,16 @@ class AuthServiceImplCharacterizationTest {
     void refresh_success_rotatesBothTokensWithLatestClaimsAndOriginalSession() {
         String refreshToken = "refresh-token";
         TokenRefreshRequest request = new TokenRefreshRequest(refreshToken);
-        RefreshSession session = newSession(USER_ID, refreshToken, OffsetDateTime.now(FIXED_CLOCK).plusDays(1));
+        RefreshSession session = newSession(ACCOUNT_ID, refreshToken, OffsetDateTime.now(FIXED_CLOCK).plusDays(1));
 
         when(jwtTokenProvider.validateToken(refreshToken)).thenReturn(true);
-        when(jwtTokenProvider.getUserIdFromToken(refreshToken)).thenReturn(USER_ID);
+        when(jwtTokenProvider.getAccountIdFromToken(refreshToken)).thenReturn(ACCOUNT_ID);
         when(tokenSessionPort.findByToken(refreshToken)).thenReturn(Optional.of(session));
-        when(crmIdentityProjectionPort.getIdentityClaims(USER_ID))
+        when(crmIdentityProjectionPort.getIdentityClaims(ACCOUNT_ID))
                 .thenReturn(new CRMIdentityClaims(ORGANIZATION_ID, ROLE, PUBLIC_ID));
-        when(jwtTokenProvider.generateAccessToken(USER_ID, ORGANIZATION_ID, ROLE, PUBLIC_ID))
+        when(jwtTokenProvider.generateAccessToken(ACCOUNT_ID, ORGANIZATION_ID, ROLE, PUBLIC_ID))
                 .thenReturn("new-access-token");
-        when(jwtTokenProvider.generateRefreshToken(USER_ID)).thenReturn("new-refresh-token");
+        when(jwtTokenProvider.generateRefreshToken(ACCOUNT_ID)).thenReturn("new-refresh-token");
         OffsetDateTime newExpiry = OffsetDateTime.now(FIXED_CLOCK).plusDays(14);
         when(jwtTokenProvider.getRefreshTokenExpiryDate()).thenReturn(newExpiry);
 
@@ -246,9 +269,9 @@ class AuthServiceImplCharacterizationTest {
         // 조회 → CRM claim 재조회 → 토큰 생성 → rotate 순서 보존
         InOrder inOrder = inOrder(tokenSessionPort, crmIdentityProjectionPort, jwtTokenProvider);
         inOrder.verify(tokenSessionPort).findByToken(refreshToken);
-        inOrder.verify(crmIdentityProjectionPort).getIdentityClaims(USER_ID);
-        inOrder.verify(jwtTokenProvider).generateAccessToken(USER_ID, ORGANIZATION_ID, ROLE, PUBLIC_ID);
-        inOrder.verify(jwtTokenProvider).generateRefreshToken(USER_ID);
+        inOrder.verify(crmIdentityProjectionPort).getIdentityClaims(ACCOUNT_ID);
+        inOrder.verify(jwtTokenProvider).generateAccessToken(ACCOUNT_ID, ORGANIZATION_ID, ROLE, PUBLIC_ID);
+        inOrder.verify(jwtTokenProvider).generateRefreshToken(ACCOUNT_ID);
 
         // rotate에는 findByToken이 반환한 바로 그 Session 인스턴스가 전달되어야 한다
         ArgumentCaptor<RefreshSession> sessionCaptor = ArgumentCaptor.forClass(RefreshSession.class);
@@ -268,11 +291,11 @@ class AuthServiceImplCharacterizationTest {
         Duration ttl = Duration.ofMinutes(5);
         when(jwtTokenProvider.getRemainingValidity(accessToken)).thenReturn(ttl);
 
-        authService.logout(USER_ID, accessToken);
+        authService.logout(ACCOUNT_ID, accessToken);
 
         InOrder inOrder = inOrder(tokenBlacklistPort, tokenSessionPort);
         inOrder.verify(tokenBlacklistPort).addToBlacklist(accessToken, ttl);
-        inOrder.verify(tokenSessionPort).deleteForUser(USER_ID);
+        inOrder.verify(tokenSessionPort).deleteForAccount(ACCOUNT_ID);
     }
 
     // 5.9 Logout blacklist 실패
@@ -285,10 +308,10 @@ class AuthServiceImplCharacterizationTest {
         doThrow(new RuntimeException("redis down"))
                 .when(tokenBlacklistPort).addToBlacklist(accessToken, ttl);
 
-        assertThatThrownBy(() -> authService.logout(USER_ID, accessToken))
+        assertThatThrownBy(() -> authService.logout(ACCOUNT_ID, accessToken))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessage("redis down");
 
-        verify(tokenSessionPort, never()).deleteForUser(anyString());
+        verify(tokenSessionPort, never()).deleteForAccount(any());
     }
 }

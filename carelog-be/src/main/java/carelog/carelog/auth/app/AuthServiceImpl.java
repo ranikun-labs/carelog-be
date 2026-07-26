@@ -11,6 +11,7 @@ import org.springframework.stereotype.*;
 import org.springframework.transaction.annotation.*;
 
 import java.time.*;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -32,19 +33,19 @@ public class AuthServiceImpl implements AuthService {
         // 1. 인증 (인증 실패는 Port가 기존과 동일하게 INVALID_CREDENTIALS로 매핑)
         UserPrincipal principal = credentialPort.authenticate(request.userId(), request.password());
 
-        // 2. 토큰 생성 (organizationId/role/publicId claim 의미 불변)
+        // 2. 토큰 생성 (organizationId/role/publicId claim 의미 불변, subject는 accountId — B0)
         String accessToken = jwtTokenProvider.generateAccessToken(
-                principal.getUserId(),
+                principal.getAccountId(),
                 principal.getOrganizationId(),
                 principal.getRole(),
                 principal.getPublicId()
         );
         String refreshToken =
-                jwtTokenProvider.generateRefreshToken(principal.getUserId());
+                jwtTokenProvider.generateRefreshToken(principal.getAccountId());
 
-        // 3. Refresh Session 교체 (기존 delete → save 순서 보존)
-        tokenSessionPort.replaceForUser(
-                principal.getUserId(),
+        // 3. Refresh Session 교체 (기존 delete → save 순서 보존, 키는 accountId)
+        tokenSessionPort.replaceForAccount(
+                principal.getAccountId(),
                 refreshToken,
                 jwtTokenProvider.getRefreshTokenExpiryDate()
         );
@@ -54,13 +55,13 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public void logout(String userId, String accessToken) {
+    public void logout(UUID accountId, String accessToken) {
         Duration ttl = jwtTokenProvider.getRemainingValidity(accessToken);
         tokenBlacklistPort.addToBlacklist(accessToken, ttl);
 
         // Refresh Session 삭제 (blacklist → delete 순서 보존)
-        tokenSessionPort.deleteForUser(userId);
-        log.info("로그아웃: {}", userId);
+        tokenSessionPort.deleteForAccount(accountId);
+        log.info("로그아웃: {}", accountId);
     }
 
     @Override
@@ -73,8 +74,14 @@ public class AuthServiceImpl implements AuthService {
             throw new CustomException(ExceptionStatus.INVALID_REFRESH_TOKEN);
         }
 
-        // 2. userId 추출
-        String userId = jwtTokenProvider.getUserIdFromToken(refreshToken);
+        // 2. accountId 추출 (B0 이전에 발급된 loginId subject 토큰은 UUID 파싱이 실패하므로
+        //    기존 계약과 동일하게 INVALID_REFRESH_TOKEN으로 매핑한다 — cut-over 정책)
+        UUID accountId;
+        try {
+            accountId = jwtTokenProvider.getAccountIdFromToken(refreshToken);
+        } catch (IllegalArgumentException e) {
+            throw new CustomException(ExceptionStatus.INVALID_REFRESH_TOKEN);
+        }
 
         // 3. Session 조회 (조회 키는 요청으로 받은 기존 raw refresh token)
         RefreshSession session = tokenSessionPort.findByToken(refreshToken)
@@ -86,22 +93,22 @@ public class AuthServiceImpl implements AuthService {
             throw new CustomException(ExceptionStatus.REFRESH_TOKEN_EXPIRED);
         }
 
-        // 5. userId 일치 여부 검증
-        if (!session.userId().equals(userId)) {
+        // 5. accountId 일치 여부 검증
+        if (!session.accountId().equals(accountId)) {
             throw new CustomException(ExceptionStatus.INVALID_REFRESH_TOKEN);
         }
 
         // Rotation: 최신 CRM claim 재조회로 최신 클레임 보장
-        CRMIdentityClaims claims = crmIdentityProjectionPort.getIdentityClaims(userId);
+        CRMIdentityClaims claims = crmIdentityProjectionPort.getIdentityClaims(accountId);
 
         // 6. 새 토큰 생성
         String newAccessToken = jwtTokenProvider.generateAccessToken(
-                userId,
+                accountId,
                 claims.organizationId(),
                 claims.role(),
                 claims.publicId()
         );
-        String newRefreshToken = jwtTokenProvider.generateRefreshToken(userId);
+        String newRefreshToken = jwtTokenProvider.generateRefreshToken(accountId);
 
         // 7. Session 회전 (findByToken이 반환한 기존 Session을 그대로 전달, dirty checking 보존)
         tokenSessionPort.rotate(session, newRefreshToken, jwtTokenProvider.getRefreshTokenExpiryDate());

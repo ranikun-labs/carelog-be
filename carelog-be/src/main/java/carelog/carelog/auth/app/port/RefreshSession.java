@@ -1,6 +1,7 @@
 package carelog.carelog.auth.app.port;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 /**
  * Refresh Token 세션의 내부 표현.
@@ -9,10 +10,11 @@ import java.time.OffsetDateTime;
  * 현재 저장 필드를 그대로 담는다.
  *
  * <p>{@code tokenValue}는 현재 평문이며, 향후 보안 결정(hash 전환) 시 대체/제거 대상으로 미리 표시해 둔다.
+ * {@code accountId}는 Identity Foundation B0부터 세션의 공식 식별자다(과거 loginId 대체).
  */
 public record RefreshSession(
         String tokenValue,
-        String userId,
+        UUID accountId,
         OffsetDateTime expiresAt
 ) {
 }

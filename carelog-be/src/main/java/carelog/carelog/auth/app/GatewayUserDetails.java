@@ -10,24 +10,28 @@ import java.util.UUID;
 
 public class GatewayUserDetails implements UserDetails, UserPrincipal {
 
-    private final String userId;
+    // Identity Foundation B0부터 X-User-Id(=JWT subject)는 accountId다. Gateway는 loginId를 전달하지
+    // 않으므로(애초에 모른다) getUserId()는 accountId의 문자열 표현을 그대로 반환한다.
+    private final UUID accountId;
     private final UUID organizationId;
     private final String role;
     private final UUID publicId;
 
     public GatewayUserDetails(
-            String userId, UUID organizationId,
+            UUID accountId, UUID organizationId,
             String role, UUID publicId
     ) {
-        this.userId = userId;
+        this.accountId = accountId;
         this.organizationId = organizationId;
         this.role = role;
         this.publicId = publicId;
     }
 
+    @Override
+    public UUID getAccountId() { return accountId; }
 
     @Override
-    public String getUserId() { return userId; }
+    public String getUserId() { return accountId.toString(); }
 
     @Override
     public UUID getOrganizationId() { return organizationId; }
@@ -39,7 +43,7 @@ public class GatewayUserDetails implements UserDetails, UserPrincipal {
     public UUID getPublicId() { return publicId; }
 
     @Override
-    public String getUsername() { return userId; }
+    public String getUsername() { return accountId.toString(); }
 
     @Override
     public String getPassword() { return null; }

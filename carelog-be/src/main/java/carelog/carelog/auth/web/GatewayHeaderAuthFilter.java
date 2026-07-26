@@ -48,18 +48,22 @@ public class GatewayHeaderAuthFilter extends OncePerRequestFilter {
                 response.sendError(HttpServletResponse.SC_FORBIDDEN, "Missing required auth headers");
                 return;
             }
+            UUID parsedAccountId;
             UUID parsedOrgId;
             UUID parsedPublicId;
             try {
+                // X-User-Id는 Identity Foundation B0부터 accountId(UUID)다(과거 loginId 문자열 대체).
+                parsedAccountId = UUID.fromString(userId);
                 parsedOrgId = UUID.fromString(organizationId);
                 parsedPublicId = UUID.fromString(publicId);
             } catch (IllegalArgumentException e) {
-                log.warn("Malformed UUID in gateway headers: organizationId={}, publicId={}", organizationId, publicId);
+                log.warn("Malformed UUID in gateway headers: userId={}, organizationId={}, publicId={}",
+                        userId, organizationId, publicId);
                 response.sendError(HttpServletResponse.SC_FORBIDDEN, "Malformed auth headers");
                 return;
             }
             GatewayUserDetails userDetails = new GatewayUserDetails(
-                    userId,
+                    parsedAccountId,
                     parsedOrgId,
                     role,
                     parsedPublicId

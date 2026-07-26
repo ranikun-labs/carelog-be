@@ -4,6 +4,8 @@ package carelog.carelog.auth.app;
 import carelog.carelog.auth.web.dto.request.*;
 import carelog.carelog.auth.web.dto.response.*;
 
+import java.util.UUID;
+
 public interface AuthService {
 
     /**
@@ -14,7 +16,7 @@ public interface AuthService {
     /**
      * 로그아웃
      */
-    void logout(String userId, String accessToken);
+    void logout(UUID accountId, String accessToken);
 
     /**
      * 토큰 갱신

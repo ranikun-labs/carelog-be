@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.OffsetDateTime;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * {@link TokenSessionPort}의 Legacy 구현.
@@ -27,10 +28,10 @@ public class LegacyTokenSessionAdapter implements TokenSessionPort {
     private final RefreshTokenRepository refreshTokenRepository;
 
     @Override
-    public void replaceForUser(String userId, String newToken, OffsetDateTime expiresAt) {
-        refreshTokenRepository.deleteByUserId(userId);
+    public void replaceForAccount(UUID accountId, String newToken, OffsetDateTime expiresAt) {
+        refreshTokenRepository.deleteByAccountId(accountId);
         refreshTokenRepository.save(RefreshToken.builder()
-                .userId(userId)
+                .accountId(accountId)
                 .refreshToken(newToken)
                 .tokenExpiresAt(expiresAt)
                 .build());
@@ -50,8 +51,8 @@ public class LegacyTokenSessionAdapter implements TokenSessionPort {
     }
 
     @Override
-    public void deleteForUser(String userId) {
-        refreshTokenRepository.deleteByUserId(userId);
+    public void deleteForAccount(UUID accountId) {
+        refreshTokenRepository.deleteByAccountId(accountId);
     }
 
     @Override
@@ -61,6 +62,6 @@ public class LegacyTokenSessionAdapter implements TokenSessionPort {
     }
 
     private RefreshSession toSession(RefreshToken entity) {
-        return new RefreshSession(entity.getRefreshToken(), entity.getUserId(), entity.getTokenExpiresAt());
+        return new RefreshSession(entity.getRefreshToken(), entity.getAccountId(), entity.getTokenExpiresAt());
     }
 }

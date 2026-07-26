@@ -8,6 +8,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "refresh_token")
@@ -23,16 +24,21 @@ public class RefreshToken extends BaseEntity {
     @Column(name = "refresh_token", nullable = false, unique = true, length = 500)
     private String refreshToken;
 
-    @Column(name = "user_id", nullable = false)
+    // 세션의 공식 조회 키(Identity Foundation B0). loginId가 없는 Principal(향후 OAuth)도 세션을 가질 수 있어야 하므로 nullable.
+    @Column(name = "account_id")
+    private UUID accountId;
+
+    // Legacy Mirror: 과거 loginId 기반 조회의 흔적. 더 이상 조회 키로 쓰이지 않으며 신규 행에는 채우지 않는다(V5에서 NOT NULL 해제).
+    @Column(name = "user_id")
     private String userId;
 
     @Column(name = "token_expires_at", nullable = false)
     private OffsetDateTime tokenExpiresAt;
 
     @Builder
-    public RefreshToken(String refreshToken, String userId, OffsetDateTime tokenExpiresAt) {
+    public RefreshToken(String refreshToken, UUID accountId, OffsetDateTime tokenExpiresAt) {
         this.refreshToken = refreshToken;
-        this.userId = userId;
+        this.accountId = accountId;
         this.tokenExpiresAt = tokenExpiresAt;
     }
 

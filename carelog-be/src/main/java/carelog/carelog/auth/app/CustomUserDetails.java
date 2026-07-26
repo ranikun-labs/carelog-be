@@ -17,6 +17,8 @@ public class CustomUserDetails implements UserDetails, UserPrincipal {
         this.user = user;
     }
 
+    @Override
+    public UUID getAccountId() { return user.getAccountId(); }
     public UUID getOrganizationId() { return user.getOrganizationId(); }
     public UUID getPublicId() { return user.getPublicId(); }
     public String getRole() {return user.getRole().name(); }
