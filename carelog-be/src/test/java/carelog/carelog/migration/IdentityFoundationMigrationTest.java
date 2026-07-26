@@ -49,7 +49,7 @@ class IdentityFoundationMigrationTest {
         var result = flyway.migrate();
 
         assertThat(result.success).isTrue();
-        assertThat(result.migrationsExecuted).isEqualTo(4);
+        assertThat(result.migrationsExecuted).isEqualTo(5);
 
         try (Connection conn = DriverManager.getConnection(jdbcUrl, POSTGRES.getUsername(), POSTGRES.getPassword())) {
             assertTableExists(conn, "users");
@@ -61,6 +61,7 @@ class IdentityFoundationMigrationTest {
             assertTableExists(conn, "password_credentials");
             assertTableExists(conn, "external_identities");
             assertColumnExists(conn, "users", "account_id");
+            assertColumnExists(conn, "refresh_token", "account_id");
         }
     }
 
@@ -94,8 +95,8 @@ class IdentityFoundationMigrationTest {
         var result = flyway.migrate();
 
         assertThat(result.success).isTrue();
-        // baseline이 V1을 흡수하므로 실행되는 건 V2/V3/V4 3개뿐이어야 한다.
-        assertThat(result.migrationsExecuted).isEqualTo(3);
+        // baseline이 V1을 흡수하므로 실행되는 건 V2/V3/V4/V5 4개뿐이어야 한다.
+        assertThat(result.migrationsExecuted).isEqualTo(4);
 
         try (Connection conn = DriverManager.getConnection(jdbcUrl, POSTGRES.getUsername(), POSTGRES.getPassword())) {
             // MANAGER Account 수 == Credential 수 == 1, CUSTOMER Account 수 == 0
@@ -136,6 +137,110 @@ class IdentityFoundationMigrationTest {
             assertThat(countRows(conn,
                     "SELECT COUNT(*) FROM users u WHERE u.account_id IS NOT NULL AND u.account_id NOT IN (SELECT id FROM platform_accounts)"))
                     .isEqualTo(0);
+        }
+    }
+
+    @DisplayName("V5는 refresh_token.user_id(loginId)로 account_id를 백필하고, 고아 행을 삭제하며 " +
+            "account_id를 필수 키로 강제한다")
+    @Test
+    void v5_backfillsMappedRowsDeletesOrphansAndRequiresAccountId() throws Exception {
+        String jdbcUrl = createDatabase("refresh_token_backfill_db");
+        applyV1Directly(jdbcUrl);
+
+        UUID managerPublicId = UUID.randomUUID();
+        UUID managerOrgId = UUID.randomUUID();
+        try (Connection conn = DriverManager.getConnection(jdbcUrl, POSTGRES.getUsername(), POSTGRES.getPassword())) {
+            insertLegacyUser(conn, managerPublicId, managerOrgId, "legacy-manager", "legacy-manager@example.com",
+                    "hash1", "MANAGER", "PHYSICAL_THERAPIST");
+        }
+
+        // V4까지 적용해 password_credentials(login_id="legacy-manager", account_id=managerPublicId)를 만든 뒤,
+        // V5 적용 전 상태의 refresh_token 두 행을 raw INSERT로 시뮬레이션한다.
+        Flyway flywayToV4 = Flyway.configure()
+                .dataSource(jdbcUrl, POSTGRES.getUsername(), POSTGRES.getPassword())
+                .baselineOnMigrate(true)
+                .baselineVersion("1")
+                .target("4")
+                .load();
+        flywayToV4.migrate();
+
+        OffsetDateTime now = OffsetDateTime.now();
+        try (Connection conn = DriverManager.getConnection(jdbcUrl, POSTGRES.getUsername(), POSTGRES.getPassword())) {
+            // 매핑 가능: user_id가 실제 password_credentials.login_id와 일치
+            insertLegacyRefreshToken(conn, "mapped-refresh-token", "legacy-manager", now.plusDays(7));
+            // 매핑 불가(고아 행): user_id가 어떤 login_id와도 일치하지 않음(예: 탈퇴/오염된 과거 세션)
+            insertLegacyRefreshToken(conn, "orphan-refresh-token", "deleted-user-no-longer-exists", now.plusDays(7));
+        }
+
+        Flyway flywayFull = Flyway.configure()
+                .dataSource(jdbcUrl, POSTGRES.getUsername(), POSTGRES.getPassword())
+                .baselineOnMigrate(true)
+                .baselineVersion("1")
+                .load();
+        var result = flywayFull.migrate();
+
+        assertThat(result.success).isTrue();
+
+        try (Connection conn = DriverManager.getConnection(jdbcUrl, POSTGRES.getUsername(), POSTGRES.getPassword())) {
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT account_id FROM refresh_token WHERE refresh_token = ?")) {
+                ps.setString(1, "mapped-refresh-token");
+                try (ResultSet rs = ps.executeQuery()) {
+                    assertThat(rs.next()).isTrue();
+                    assertThat(rs.getObject("account_id", UUID.class)).isEqualTo(managerPublicId);
+                }
+            }
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT COUNT(*) FROM refresh_token WHERE refresh_token = ?")) {
+                ps.setString(1, "orphan-refresh-token");
+                try (ResultSet rs = ps.executeQuery()) {
+                    assertThat(rs.next()).isTrue();
+                    assertThat(rs.getInt(1)).isZero();
+                }
+            }
+
+            // account_id 없는 신규 세션은 DB 불변식 위반으로 저장되면 안 된다.
+            assertThatThrownBy(() -> {
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "INSERT INTO refresh_token (refresh_token, token_expires_at, created_at, updated_at) " +
+                                "VALUES (?, ?, ?, ?)")) {
+                    ps.setString(1, "missing-account-id-refresh-token");
+                    ps.setObject(2, now.plusDays(7));
+                    ps.setObject(3, now);
+                    ps.setObject(4, now);
+                    ps.executeUpdate();
+                }
+            }).isInstanceOf(Exception.class);
+
+            // user_id의 NOT NULL은 해제되지만 account_id가 있으면 신규 세션은 저장 가능해야 한다.
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "INSERT INTO refresh_token (refresh_token, account_id, token_expires_at, created_at, updated_at) " +
+                            "VALUES (?, ?, ?, ?, ?)")) {
+                ps.setString(1, "no-login-id-refresh-token");
+                ps.setObject(2, managerPublicId);
+                ps.setObject(3, now.plusDays(7));
+                ps.setObject(4, now);
+                ps.setObject(5, now);
+                ps.executeUpdate();
+            }
+
+            // 존재하지 않는 accountId는 FK가 차단하고, account_id 조회 인덱스는 유지돼야 한다.
+            assertThatThrownBy(() -> {
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "INSERT INTO refresh_token (refresh_token, account_id, token_expires_at, created_at, updated_at) " +
+                                "VALUES (?, ?, ?, ?, ?)")) {
+                    ps.setString(1, "unknown-account-refresh-token");
+                    ps.setObject(2, UUID.randomUUID());
+                    ps.setObject(3, now.plusDays(7));
+                    ps.setObject(4, now);
+                    ps.setObject(5, now);
+                    ps.executeUpdate();
+                }
+            }).isInstanceOf(Exception.class);
+            assertThat(countRows(conn,
+                    "SELECT COUNT(*) FROM pg_indexes WHERE schemaname = 'public' " +
+                            "AND tablename = 'refresh_token' AND indexname = 'idx_refresh_token_account_id'"))
+                    .isEqualTo(1);
         }
     }
 
@@ -180,6 +285,22 @@ class IdentityFoundationMigrationTest {
         assertThatThrownBy(flywayFull::migrate)
                 .as("중복 login_id가 있으면 V4의 unique 제약 추가가 실패해야 한다")
                 .isInstanceOf(Exception.class);
+    }
+
+    private void insertLegacyRefreshToken(
+            Connection conn, String refreshToken, String userId, OffsetDateTime expiresAt
+    ) throws Exception {
+        OffsetDateTime now = OffsetDateTime.now();
+        try (PreparedStatement ps = conn.prepareStatement(
+                "INSERT INTO refresh_token (refresh_token, user_id, token_expires_at, created_at, updated_at) " +
+                        "VALUES (?, ?, ?, ?, ?)")) {
+            ps.setString(1, refreshToken);
+            ps.setString(2, userId);
+            ps.setObject(3, expiresAt);
+            ps.setObject(4, now);
+            ps.setObject(5, now);
+            ps.executeUpdate();
+        }
     }
 
     private String createDatabase(String dbName) throws Exception {

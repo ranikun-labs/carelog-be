@@ -119,7 +119,7 @@ class GatewayHeaderAuthFilterCharacterizationTest {
     @Test
     void doFilterInternal_userIdWithoutOrganizationId_returns403() throws Exception {
         when(request.getHeader("X-Gateway-Secret")).thenReturn(INTERNAL_SECRET);
-        when(request.getHeader("X-User-Id")).thenReturn("manager@example.com");
+        when(request.getHeader("X-User-Id")).thenReturn(UUID.randomUUID().toString());
         when(request.getHeader("X-Organization-Id")).thenReturn(null);
         when(request.getHeader("X-Role")).thenReturn("MANAGER");
         when(request.getHeader("X-Public-Id")).thenReturn(UUID.randomUUID().toString());
@@ -134,7 +134,7 @@ class GatewayHeaderAuthFilterCharacterizationTest {
     @Test
     void doFilterInternal_userIdWithoutPublicId_returns403() throws Exception {
         when(request.getHeader("X-Gateway-Secret")).thenReturn(INTERNAL_SECRET);
-        when(request.getHeader("X-User-Id")).thenReturn("manager@example.com");
+        when(request.getHeader("X-User-Id")).thenReturn(UUID.randomUUID().toString());
         when(request.getHeader("X-Organization-Id")).thenReturn(UUID.randomUUID().toString());
         when(request.getHeader("X-Role")).thenReturn("MANAGER");
         when(request.getHeader("X-Public-Id")).thenReturn(null);
@@ -145,11 +145,26 @@ class GatewayHeaderAuthFilterCharacterizationTest {
         verifyNoInteractions(filterChain);
     }
 
+    @DisplayName("X-User-Id가 UUID 형식이 아니면(B0 이전 loginId subject 등) 403을 반환하고 filterChain을 진행하지 않는다")
+    @Test
+    void doFilterInternal_malformedUserId_returns403() throws Exception {
+        when(request.getHeader("X-Gateway-Secret")).thenReturn(INTERNAL_SECRET);
+        when(request.getHeader("X-User-Id")).thenReturn("manager@example.com");
+        when(request.getHeader("X-Organization-Id")).thenReturn(UUID.randomUUID().toString());
+        when(request.getHeader("X-Role")).thenReturn("MANAGER");
+        when(request.getHeader("X-Public-Id")).thenReturn(UUID.randomUUID().toString());
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        verify(response).sendError(HttpServletResponse.SC_FORBIDDEN, "Malformed auth headers");
+        verifyNoInteractions(filterChain);
+    }
+
     @DisplayName("organizationId가 UUID 형식이 아니면 403을 반환하고 filterChain을 진행하지 않는다")
     @Test
     void doFilterInternal_malformedOrganizationId_returns403() throws Exception {
         when(request.getHeader("X-Gateway-Secret")).thenReturn(INTERNAL_SECRET);
-        when(request.getHeader("X-User-Id")).thenReturn("manager@example.com");
+        when(request.getHeader("X-User-Id")).thenReturn(UUID.randomUUID().toString());
         when(request.getHeader("X-Organization-Id")).thenReturn("not-a-uuid");
         when(request.getHeader("X-Role")).thenReturn("MANAGER");
         when(request.getHeader("X-Public-Id")).thenReturn(UUID.randomUUID().toString());
@@ -164,7 +179,7 @@ class GatewayHeaderAuthFilterCharacterizationTest {
     @Test
     void doFilterInternal_malformedPublicId_returns403() throws Exception {
         when(request.getHeader("X-Gateway-Secret")).thenReturn(INTERNAL_SECRET);
-        when(request.getHeader("X-User-Id")).thenReturn("manager@example.com");
+        when(request.getHeader("X-User-Id")).thenReturn(UUID.randomUUID().toString());
         when(request.getHeader("X-Organization-Id")).thenReturn(UUID.randomUUID().toString());
         when(request.getHeader("X-Role")).thenReturn("MANAGER");
         when(request.getHeader("X-Public-Id")).thenReturn("not-a-uuid");
@@ -178,10 +193,11 @@ class GatewayHeaderAuthFilterCharacterizationTest {
     @DisplayName("모든 헤더가 유효하면 GatewayUserDetails로 SecurityContext를 채우고 filterChain을 진행한다")
     @Test
     void doFilterInternal_validHeaders_setsSecurityContextAndContinuesChain() throws Exception {
+        UUID accountId = UUID.randomUUID();
         UUID organizationId = UUID.randomUUID();
         UUID publicId = UUID.randomUUID();
         when(request.getHeader("X-Gateway-Secret")).thenReturn(INTERNAL_SECRET);
-        when(request.getHeader("X-User-Id")).thenReturn("manager@example.com");
+        when(request.getHeader("X-User-Id")).thenReturn(accountId.toString());
         when(request.getHeader("X-Organization-Id")).thenReturn(organizationId.toString());
         when(request.getHeader("X-Role")).thenReturn("MANAGER");
         when(request.getHeader("X-Public-Id")).thenReturn(publicId.toString());
@@ -195,7 +211,8 @@ class GatewayHeaderAuthFilterCharacterizationTest {
         assertThat(authentication).isNotNull();
         assertThat(authentication.getPrincipal()).isInstanceOf(GatewayUserDetails.class);
         GatewayUserDetails principal = (GatewayUserDetails) authentication.getPrincipal();
-        assertThat(principal.getUserId()).isEqualTo("manager@example.com");
+        assertThat(principal.getAccountId()).isEqualTo(accountId);
+        assertThat(principal.getUserId()).isEqualTo(accountId.toString());
         assertThat(principal.getOrganizationId()).isEqualTo(organizationId);
         assertThat(principal.getRole()).isEqualTo("MANAGER");
         assertThat(principal.getPublicId()).isEqualTo(publicId);
@@ -207,10 +224,11 @@ class GatewayHeaderAuthFilterCharacterizationTest {
     @DisplayName("[Known Limitation] X-Role 헤더가 없으면 role=null 상태로 인증을 설정하고 권한 문자열은 ROLE_null이 된다")
     @Test
     void doFilterInternal_missingRoleHeader_setsNullRoleAndRoleNullAuthority() throws Exception {
+        UUID accountId = UUID.randomUUID();
         UUID organizationId = UUID.randomUUID();
         UUID publicId = UUID.randomUUID();
         when(request.getHeader("X-Gateway-Secret")).thenReturn(INTERNAL_SECRET);
-        when(request.getHeader("X-User-Id")).thenReturn("manager@example.com");
+        when(request.getHeader("X-User-Id")).thenReturn(accountId.toString());
         when(request.getHeader("X-Organization-Id")).thenReturn(organizationId.toString());
         when(request.getHeader("X-Role")).thenReturn(null);
         when(request.getHeader("X-Public-Id")).thenReturn(publicId.toString());
@@ -226,13 +244,15 @@ class GatewayHeaderAuthFilterCharacterizationTest {
                 .containsExactly("ROLE_null");
     }
 
-    @DisplayName("[Known Limitation] 시크릿만 일치하면 호출자가 직접 보낸 신원 헤더도 그대로 신뢰한다 - 신뢰 경계는 secret 값 하나뿐이다")
+    @DisplayName("[Known Limitation] 시크릿만 일치하면 호출자가 직접 보낸 신원 헤더도 그대로 신뢰한다 - 신뢰 경계는 secret 값 하나뿐이다 " +
+            "(B0부터는 형식이 UUID인 임의 accountId까지로 스푸핑 범위가 좁혀진다)")
     @Test
     void doFilterInternal_trustsAnyCallerSuppliedIdentityHeadersOnceSecretMatches() throws Exception {
+        UUID spoofedAccountId = UUID.randomUUID();
         UUID organizationId = UUID.randomUUID();
         UUID publicId = UUID.randomUUID();
         when(request.getHeader("X-Gateway-Secret")).thenReturn(INTERNAL_SECRET);
-        when(request.getHeader("X-User-Id")).thenReturn("spoofed-admin@example.com");
+        when(request.getHeader("X-User-Id")).thenReturn(spoofedAccountId.toString());
         when(request.getHeader("X-Organization-Id")).thenReturn(organizationId.toString());
         when(request.getHeader("X-Role")).thenReturn("MANAGER");
         when(request.getHeader("X-Public-Id")).thenReturn(publicId.toString());
@@ -241,8 +261,9 @@ class GatewayHeaderAuthFilterCharacterizationTest {
 
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         GatewayUserDetails principal = (GatewayUserDetails) authentication.getPrincipal();
-        assertThat(principal.getUserId()).isEqualTo("spoofed-admin@example.com");
-        // Gateway를 거치지 않고 secret만 알면, 동일 이름 헤더로 임의 신원을 주장할 수 있는
-        // 현재 신뢰 모델의 한계(개별 헤더에 대한 서명/추가 검증 없음).
+        assertThat(principal.getAccountId()).isEqualTo(spoofedAccountId);
+        // Gateway를 거치지 않고 secret만 알면, 형식이 유효한 UUID인 임의 accountId를 주장할 수 있는
+        // 현재 신뢰 모델의 한계(개별 헤더에 대한 서명/추가 검증 없음). B0 이전에는 임의 문자열까지
+        // 스푸핑 가능했으나, X-User-Id의 UUID 형식 검증이 도입되며 스푸핑 가능한 값의 형식만 좁아졌다.
     }
 }

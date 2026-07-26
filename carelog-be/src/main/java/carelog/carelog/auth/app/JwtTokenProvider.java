@@ -35,14 +35,14 @@ public class JwtTokenProvider {
     }
 
     /**
-     * Access Token 생성
+     * Access Token 생성. subject는 Identity Foundation B0부터 PlatformAccount.accountId다(과거 loginId 대체).
      */
     public String generateAccessToken(
-            String userId, UUID organizationId, String role, UUID publicId
+            UUID accountId, UUID organizationId, String role, UUID publicId
     ) {
         Instant now = Instant.now(clock);
         return Jwts.builder()
-                .subject(userId)
+                .subject(accountId.toString())
                 .claim("organizationId", organizationId.toString())
                 .claim("role", role)
                 .claim("publicId", publicId.toString())
@@ -53,12 +53,12 @@ public class JwtTokenProvider {
     }
 
     /**
-     * Refresh Token 생성
+     * Refresh Token 생성. subject는 Access Token과 동일하게 accountId다.
      */
-    public String generateRefreshToken(String userId) {
+    public String generateRefreshToken(UUID accountId) {
         Instant now = Instant.now(clock);
         return Jwts.builder()
-                .subject(userId)
+                .subject(accountId.toString())
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plusMillis(refreshTokenValidity)))
                 .signWith(secretKey)
@@ -66,10 +66,11 @@ public class JwtTokenProvider {
     }
 
     /**
-     * Token에서 userId 추출
+     * Token에서 accountId 추출. subject가 UUID 형식이 아니면(예: B0 전환 이전에 발급된 loginId subject
+     * 토큰) {@link IllegalArgumentException}을 던진다 — 호출자가 기존 INVALID_REFRESH_TOKEN 계약으로 매핑한다.
      */
-    public String getUserIdFromToken(String token) {
-        return getClaims(token).getSubject();
+    public UUID getAccountIdFromToken(String token) {
+        return UUID.fromString(getClaims(token).getSubject());
     }
 
     /**

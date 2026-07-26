@@ -32,7 +32,7 @@ class JwtTokenProviderCharacterizationTest {
     private static final long ACCESS_TOKEN_VALIDITY_MILLIS = Duration.ofMinutes(15).toMillis();
     private static final long REFRESH_TOKEN_VALIDITY_MILLIS = Duration.ofDays(14).toMillis();
 
-    private static final String USER_ID = "manager@example.com";
+    private static final UUID ACCOUNT_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
     private static final UUID ORGANIZATION_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID PUBLIC_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private static final String ROLE = "MANAGER";
@@ -53,15 +53,15 @@ class JwtTokenProviderCharacterizationTest {
     }
 
     // 7.1 Access Token claims와 TTL
-    @DisplayName("Access Token은 현재 claim(organizationId/role/publicId)과 설정된 TTL을 담고 managerType은 포함하지 않는다")
+    @DisplayName("Access Token은 subject=accountId, claim(organizationId/role/publicId)과 설정된 TTL을 담고 managerType은 포함하지 않는다")
     @Test
     void accessToken_containsCurrentClaimsAndConfiguredLifetime() {
-        String accessToken = jwtTokenProvider.generateAccessToken(USER_ID, ORGANIZATION_ID, ROLE, PUBLIC_ID);
+        String accessToken = jwtTokenProvider.generateAccessToken(ACCOUNT_ID, ORGANIZATION_ID, ROLE, PUBLIC_ID);
 
         Claims claims = Jwts.parser().verifyWith(verificationKey).build()
                 .parseSignedClaims(accessToken).getPayload();
 
-        assertThat(claims.getSubject()).isEqualTo(USER_ID);
+        assertThat(claims.getSubject()).isEqualTo(ACCOUNT_ID.toString());
         assertThat(claims.get("organizationId", String.class)).isEqualTo(ORGANIZATION_ID.toString());
         assertThat(claims.get("role", String.class)).isEqualTo(ROLE);
         assertThat(claims.get("publicId", String.class)).isEqualTo(PUBLIC_ID.toString());
@@ -74,15 +74,15 @@ class JwtTokenProviderCharacterizationTest {
     }
 
     // 7.2 Refresh Token의 최소 claims와 TTL
-    @DisplayName("Refresh Token은 subject만 담고 organizationId/role/publicId 없이 설정된 TTL을 갖는다")
+    @DisplayName("Refresh Token은 subject(accountId)만 담고 organizationId/role/publicId 없이 설정된 TTL을 갖는다")
     @Test
     void refreshToken_containsOnlySubjectAndConfiguredLifetime() {
-        String refreshToken = jwtTokenProvider.generateRefreshToken(USER_ID);
+        String refreshToken = jwtTokenProvider.generateRefreshToken(ACCOUNT_ID);
 
         Claims claims = Jwts.parser().verifyWith(verificationKey).build()
                 .parseSignedClaims(refreshToken).getPayload();
 
-        assertThat(claims.getSubject()).isEqualTo(USER_ID);
+        assertThat(claims.getSubject()).isEqualTo(ACCOUNT_ID.toString());
         assertThat(claims.getIssuedAt()).isNotNull();
         assertThat(claims.getExpiration()).isNotNull();
         assertThat(claims.getExpiration().getTime() - claims.getIssuedAt().getTime())
@@ -103,9 +103,35 @@ class JwtTokenProviderCharacterizationTest {
                 TEST_SECRET, 1_000L, REFRESH_TOKEN_VALIDITY_MILLIS, farPastClock
         );
         String expiredAccessToken =
-                expiredTokenIssuer.generateAccessToken(USER_ID, ORGANIZATION_ID, ROLE, PUBLIC_ID);
+                expiredTokenIssuer.generateAccessToken(ACCOUNT_ID, ORGANIZATION_ID, ROLE, PUBLIC_ID);
 
         assertThatThrownBy(() -> jwtTokenProvider.getRemainingValidity(expiredAccessToken))
                 .isInstanceOf(ExpiredJwtException.class);
+    }
+
+    // 7.4 accountId 추출 (B0)
+    @DisplayName("getAccountIdFromToken은 발급 시 사용한 accountId를 그대로 되돌려준다")
+    @Test
+    void getAccountIdFromToken_roundTripsIssuedAccountId() {
+        String accessToken = jwtTokenProvider.generateAccessToken(ACCOUNT_ID, ORGANIZATION_ID, ROLE, PUBLIC_ID);
+        String refreshToken = jwtTokenProvider.generateRefreshToken(ACCOUNT_ID);
+
+        assertThat(jwtTokenProvider.getAccountIdFromToken(accessToken)).isEqualTo(ACCOUNT_ID);
+        assertThat(jwtTokenProvider.getAccountIdFromToken(refreshToken)).isEqualTo(ACCOUNT_ID);
+    }
+
+    // 7.5 B0 cut-over: subject가 UUID가 아닌 legacy(loginId) 토큰
+    @DisplayName("subject가 UUID 형식이 아닌 legacy 토큰은 getAccountIdFromToken에서 IllegalArgumentException을 던진다")
+    @Test
+    void getAccountIdFromToken_legacyLoginIdSubject_throwsIllegalArgumentException() {
+        String legacySubjectToken = Jwts.builder()
+                .subject("manager@example.com")
+                .issuedAt(java.util.Date.from(Instant.now(fixedClock)))
+                .expiration(java.util.Date.from(Instant.now(fixedClock).plusSeconds(60)))
+                .signWith(verificationKey)
+                .compact();
+
+        assertThatThrownBy(() -> jwtTokenProvider.getAccountIdFromToken(legacySubjectToken))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }

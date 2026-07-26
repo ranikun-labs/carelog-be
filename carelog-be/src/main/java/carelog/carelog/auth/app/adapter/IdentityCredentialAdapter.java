@@ -19,8 +19,8 @@ import java.util.Optional;
  * {@link CredentialPort}의 Identity Foundation 구현.
  *
  * <p>비밀번호 검증을 {@code password_credentials}(Identity 소유)에서 수행한다.
- * organizationId/role/publicId는 여전히 {@link CRMIdentityProjectionPort}(변경 없음)로 조회해
- * 기존 Token Claim과 완전히 동일한 값을 보장한다.
+ * organizationId/role/publicId는 {@link CRMIdentityProjectionPort}로 조회하되, 조회 키는 Identity
+ * Foundation B0부터 loginId가 아니라 {@code PasswordCredential.accountId}다(기존 Token Claim 값 자체는 동일).
  */
 @Slf4j
 @Component
@@ -33,16 +33,17 @@ public class IdentityCredentialAdapter implements CredentialPort {
 
     @Override
     public UserPrincipal authenticate(String userId, String password) {
-        Optional<PasswordCredential> credential = passwordCredentialRepository.findByLoginId(userId);
+        Optional<PasswordCredential> credentialOpt = passwordCredentialRepository.findByLoginId(userId);
 
-        if (credential.isEmpty() || !passwordEncoder.matches(password, credential.get().getPasswordHash())) {
+        if (credentialOpt.isEmpty() || !passwordEncoder.matches(password, credentialOpt.get().getPasswordHash())) {
             // 로그인 실패 운영 로그: userId만 남기고 비밀번호/토큰은 남기지 않는다.
             log.warn("로그인 실패 - userId: {}", userId);
             throw new CustomException(ExceptionStatus.INVALID_CREDENTIALS);
         }
 
-        CRMIdentityClaims claims = crmIdentityProjectionPort.getIdentityClaims(userId);
+        PasswordCredential credential = credentialOpt.get();
+        CRMIdentityClaims claims = crmIdentityProjectionPort.getIdentityClaims(credential.getAccountId());
         return new IdentityAuthenticatedPrincipal(
-                userId, claims.organizationId(), claims.role(), claims.publicId());
+                credential.getAccountId(), userId, claims.organizationId(), claims.role(), claims.publicId());
     }
 }

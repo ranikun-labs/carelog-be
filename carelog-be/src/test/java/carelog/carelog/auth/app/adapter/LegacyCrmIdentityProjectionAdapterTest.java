@@ -25,6 +25,7 @@ import static org.mockito.Mockito.when;
 class LegacyCrmIdentityProjectionAdapterTest {
 
     private static final UUID ORGANIZATION_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
+    private static final UUID ACCOUNT_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
     private static final String USER_ID = "manager@example.com";
 
     @Mock private UserRepository userRepository;
@@ -53,9 +54,9 @@ class LegacyCrmIdentityProjectionAdapterTest {
     @Test
     void getIdentityClaims_found_projectsOnlyThreeFields() {
         User user = newManagerUser(USER_ID);
-        when(userRepository.findByUserId(USER_ID)).thenReturn(Optional.of(user));
+        when(userRepository.findByAccountId(ACCOUNT_ID)).thenReturn(Optional.of(user));
 
-        CRMIdentityClaims claims = adapter.getIdentityClaims(USER_ID);
+        CRMIdentityClaims claims = adapter.getIdentityClaims(ACCOUNT_ID);
 
         assertThat(claims.organizationId()).isEqualTo(ORGANIZATION_ID);
         assertThat(claims.role()).isEqualTo(UserRole.MANAGER.name());
@@ -67,9 +68,9 @@ class LegacyCrmIdentityProjectionAdapterTest {
     @DisplayName("User가 없으면 USER_NOT_FOUND로 매핑한다")
     @Test
     void getIdentityClaims_notFound_throwsUserNotFound() {
-        when(userRepository.findByUserId(USER_ID)).thenReturn(Optional.empty());
+        when(userRepository.findByAccountId(ACCOUNT_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> adapter.getIdentityClaims(USER_ID))
+        assertThatThrownBy(() -> adapter.getIdentityClaims(ACCOUNT_ID))
                 .isInstanceOf(CustomException.class)
                 .hasFieldOrPropertyWithValue("exceptionStatus", ExceptionStatus.USER_NOT_FOUND);
     }

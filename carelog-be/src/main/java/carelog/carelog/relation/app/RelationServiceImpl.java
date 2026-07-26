@@ -27,7 +27,7 @@ public class RelationServiceImpl implements RelationService {
     @Override
     @Transactional
     public RelationResponse createRelation(UUID customerPublicId, UserPrincipal userDetails) {
-        User manager = userRepository.findByUserId(userDetails.getUserId())
+        User manager = userRepository.findByAccountId(userDetails.getAccountId())
                 .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
         User customer = userRepository.findByPublicId(customerPublicId)
                 .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
@@ -80,7 +80,7 @@ public class RelationServiceImpl implements RelationService {
 
     @Override
     public List<RelationResponse> findAllRelationsByManager(UserPrincipal userDetails) {
-        User manager = userRepository.findByUserId(userDetails.getUserId())
+        User manager = userRepository.findByAccountId(userDetails.getAccountId())
                 .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
 
         List<RelationResponse> responses = relationRepository.findAllByManager(manager).stream()

@@ -15,6 +15,8 @@ import org.springframework.http.*;
 import org.springframework.security.core.*;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
+
 @Tag(name = "인증", description = "로그인, 로그아웃, 토큰 갱신 API")
 @RestController
 @RequestMapping("/auth")
@@ -49,12 +51,13 @@ public class AuthController {
             @Parameter(hidden = true) Authentication authentication,
             @RequestHeader("Authorization") String authHeader
     ) {
-        String userId = authentication.getName();
+        // authentication.getName()은 Identity Foundation B0부터 accountId 문자열이다(과거 loginId 대체).
+        UUID accountId = UUID.fromString(authentication.getName());
         if (!authHeader.startsWith("Bearer ")) {
             return ApiResponse.noContent();
         }
         String accessToken = authHeader.substring(7);
-        authService.logout(userId, accessToken);
+        authService.logout(accountId, accessToken);
         return ApiResponse.noContent();
     }
 
