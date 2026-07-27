@@ -24,6 +24,15 @@ class KakaoOAuthConfigurationTest {
             assertThat(context).hasFailed(); assertThat(context.getStartupFailure().toString()).doesNotContain("secret-value");
         });
     }
+    @Test void timeout_필수값_URI_일부는_부분설정_실패다() {
+        for (String property : new String[]{"carelog.auth.oauth.kakao.connect-timeout=1s", "carelog.auth.oauth.kakao.client-id=id", "oauth.redirect-uris.kakao.WEB=https://web.example"}) {
+            runner.withPropertyValues(property).run(context -> assertThat(context).hasFailed());
+        }
+    }
+    @Test void 잘못된_URI와_timeout은_실패한다() {
+        configured(runner).withPropertyValues("carelog.auth.oauth.kakao.token-uri=bad", "carelog.auth.oauth.kakao.connect-timeout=0s")
+                .run(context -> assertThat(context).hasFailed());
+    }
     private ApplicationContextRunner configured(ApplicationContextRunner value) {
         return value.withPropertyValues("carelog.auth.oauth.kakao.client-id=id", "carelog.auth.oauth.kakao.authorization-uri=https://a.example", "carelog.auth.oauth.kakao.token-uri=https://t.example", "carelog.auth.oauth.kakao.user-info-uri=https://u.example", "oauth.redirect-uris.kakao.WEB=https://web.example", "oauth.redirect-uris.kakao.MOBILE=carelog://callback");
     }

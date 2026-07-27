@@ -2,6 +2,8 @@ package carelog.carelog.auth.app.adapter.oauth.kakao;
 
 import carelog.carelog.auth.app.port.oauth.OAuthLoginResult;
 import carelog.carelog.auth.app.port.oauth.OAuthProviderException;
+import carelog.carelog.auth.app.port.oauth.OAuthStateRecord;
+import carelog.carelog.auth.app.port.oauth.OAuthTokenGrant;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
@@ -14,6 +16,8 @@ import org.springframework.web.client.RestClient;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.time.Duration;
+import java.time.Clock;
+import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -50,6 +54,13 @@ class KakaoOAuthApiClientHttpTest {
                 .isInstanceOf(OAuthProviderException.class).extracting("reason").isEqualTo(OAuthLoginResult.FailureReason.PROVIDER_UNAVAILABLE);
         assertThat(server.getRequestCount()).isEqualTo(1);
     }
+    @Test void token_누락과_malformed는_안전하게_실패한다() {
+        server.enqueue(new MockResponse().setBody("{}").addHeader("Content-Type", "application/json"));
+        assertThatThrownBy(() -> client.exchangeCode("code", URI.create("https://app.example/callback"), null)).isInstanceOf(OAuthProviderException.class);
+        server.enqueue(new MockResponse().setBody("{").addHeader("Content-Type", "application/json"));
+        assertThatThrownBy(() -> client.exchangeCode("code", URI.create("https://app.example/callback"), null)).isInstanceOf(OAuthProviderException.class);
+        assertThat(server.getRequestCount()).isEqualTo(2);
+    }
     @Test void userInfo는_Bearer와_id만_처리한다() throws Exception {
         server.enqueue(new MockResponse().setBody("{\"id\":123456789}").addHeader("Content-Type", "application/json"));
         assertThat(client.fetchUser("provider-token").id()).isEqualTo(123456789L);
@@ -61,4 +72,17 @@ class KakaoOAuthApiClientHttpTest {
                 .extracting("reason").isEqualTo(OAuthLoginResult.FailureReason.PRINCIPAL_UNVERIFIED);
         assertThat(server.getRequestCount()).isEqualTo(1);
     }
+    @Test void userInfo_ID_누락과_malformed는_안전하게_실패한다() {
+        server.enqueue(new MockResponse().setBody("{}").addHeader("Content-Type", "application/json"));
+        assertThatThrownBy(() -> adapter().fetchPrincipal(new OAuthTokenGrant("provider-token", null, Instant.EPOCH), state())).isInstanceOf(OAuthProviderException.class);
+        server.enqueue(new MockResponse().setBody("{").addHeader("Content-Type", "application/json"));
+        assertThatThrownBy(() -> adapter().fetchPrincipal(new OAuthTokenGrant("provider-token", null, Instant.EPOCH), state())).isInstanceOf(OAuthProviderException.class);
+        assertThat(server.getRequestCount()).isEqualTo(2);
+    }
+    private KakaoOAuthProviderAdapter adapter() {
+        KakaoOAuthProperties properties = new KakaoOAuthProperties(); properties.setClientId("client");
+        properties.setAuthorizationUri(server.url("/authorize").toString()); properties.setTokenUri(server.url("/token").toString()); properties.setUserInfoUri(server.url("/user").toString());
+        return new KakaoOAuthProviderAdapter(client, properties, Clock.systemUTC());
+    }
+    private OAuthStateRecord state() { return new OAuthStateRecord("kakao", URI.create("https://app.example/callback"), "/", null, null, Instant.EPOCH); }
 }
