@@ -79,6 +79,22 @@ class OAuthAuthorizationServiceTest {
         assertThat(secondResult.state()).isNotEqualTo(secondStore.record.nonce());
     }
 
+    @Test
+    void PKCE를_지원하지_않는_provider에는_verifier와_challenge를_전달하지_않는다() {
+        CapturingStateStore store = new CapturingStateStore();
+        CapturingProvider provider = new CapturingProvider(false, false);
+        MockEnvironment environment = new MockEnvironment()
+                .withProperty("oauth.redirect-uris.neutral.WEB", "https://app.example.com/callback");
+
+        service(provider, store, environment).startAuthorization(
+                new OAuthAuthorizationCommand("neutral", ClientChannel.WEB, "/")
+        );
+
+        assertThat(store.record.codeVerifier()).isNull();
+        assertThat(provider.request.codeChallenge()).isNull();
+        assertThat(provider.request.codeChallengeMethod()).isNull();
+    }
+
     private OAuthAuthorizationService service(
             CapturingProvider provider, CapturingStateStore store, MockEnvironment environment
     ) {
@@ -108,14 +124,20 @@ class OAuthAuthorizationServiceTest {
 
     private static class CapturingProvider implements OAuthProviderPort {
         private final boolean requiresNonce;
+        private final boolean supportsPkce;
         private OAuthAuthorizationRequest request;
 
         private CapturingProvider(boolean requiresNonce) {
+            this(requiresNonce, true);
+        }
+        private CapturingProvider(boolean requiresNonce, boolean supportsPkce) {
             this.requiresNonce = requiresNonce;
+            this.supportsPkce = supportsPkce;
         }
 
         @Override public String providerCode() { return "neutral"; }
         @Override public boolean requiresNonce() { return requiresNonce; }
+        @Override public boolean supportsPkce() { return supportsPkce; }
         @Override public URI buildAuthorizationUrl(OAuthAuthorizationRequest request) {
             this.request = request;
             return URI.create("https://provider.example/authorize");
