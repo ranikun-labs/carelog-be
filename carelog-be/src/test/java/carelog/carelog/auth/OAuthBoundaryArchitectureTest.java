@@ -40,4 +40,15 @@ class OAuthBoundaryArchitectureTest {
                     .that().resideInAPackage("carelog.carelog.auth.app.oauth..")
                     .should().dependOnClassesThat().resideInAPackage("carelog.carelog.user.domain..")
                     .because("OAuth 로그인은 이메일로 Account를 조회하거나 자동 병합하면 안 된다");
+
+    @ArchTest
+    static final ArchRule oauth_core와_port는_Kakao_HTTP_구현에_의존하지_않는다 =
+            noClasses().that().resideInAnyPackage("carelog.carelog.auth.app.oauth..", "carelog.carelog.auth.app.port.oauth..")
+                    .should().dependOnClassesThat().resideInAPackage("carelog.carelog.auth.app.adapter.oauth.kakao..")
+                    .because("Provider-neutral OAuth Core와 Port는 Kakao HTTP 구현을 알면 안 된다");
+
+    @ArchTest
+    static final ArchRule Kakao_DTO는_Web에_노출되지_않는다 =
+            noClasses().that().resideInAPackage("carelog.carelog.auth.web..")
+                    .should().dependOnClassesThat().resideInAPackage("carelog.carelog.auth.app.adapter.oauth.kakao.dto..");
 }
