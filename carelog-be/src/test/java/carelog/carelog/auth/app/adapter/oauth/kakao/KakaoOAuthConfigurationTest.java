@@ -29,8 +29,14 @@ class KakaoOAuthConfigurationTest {
             runner.withPropertyValues(property).run(context -> assertThat(context).hasFailed());
         }
     }
-    @Test void 잘못된_URI와_timeout은_실패한다() {
-        configured(runner).withPropertyValues("carelog.auth.oauth.kakao.token-uri=bad", "carelog.auth.oauth.kakao.connect-timeout=0s")
+    @Test void 잘못된_URI는_실패한다() {
+        configured(runner).withPropertyValues("carelog.auth.oauth.kakao.token-uri=bad")
+                .run(context -> assertThat(context).hasFailed());
+    }
+    @Test void zero_timeout은_독립적으로_실패한다() {
+        configured(runner).withPropertyValues("carelog.auth.oauth.kakao.connect-timeout=0s")
+                .run(context -> assertThat(context).hasFailed());
+        configured(runner).withPropertyValues("carelog.auth.oauth.kakao.read-timeout=0s")
                 .run(context -> assertThat(context).hasFailed());
     }
     @Test void 음수_timeout은_실패한다() {
