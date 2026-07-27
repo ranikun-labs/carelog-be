@@ -1,5 +1,6 @@
 package carelog.carelog.auth.app.port;
 
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -19,4 +20,12 @@ public interface CRMIdentityProjectionPort {
      * <p>대상 없음 시 현재 계약({@code USER_NOT_FOUND})과 동일하게 매핑되어야 한다.
      */
     CRMIdentityClaims getIdentityClaims(UUID accountId);
+
+    /**
+     * accountId에 해당하는 CRM claim projection을 반환한다.
+     *
+     * <p>OAuth 로그인에서는 projection 부재를 인프라 오류가 아닌 명시적 충돌 상태로 구분해야 하므로
+     * 예외 대신 Optional로 표현한다.
+     */
+    Optional<CRMIdentityClaims> findIdentityClaims(UUID accountId);
 }

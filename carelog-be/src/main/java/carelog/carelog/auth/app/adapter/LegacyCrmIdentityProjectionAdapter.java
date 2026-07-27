@@ -9,6 +9,7 @@ import carelog.carelog.user.domain.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -29,9 +30,17 @@ public class LegacyCrmIdentityProjectionAdapter implements CRMIdentityProjection
 
     @Override
     public CRMIdentityClaims getIdentityClaims(UUID accountId) {
-        User user = userRepository.findByAccountId(accountId)
+        return findIdentityClaims(accountId)
                 .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
+    }
 
+    @Override
+    public Optional<CRMIdentityClaims> findIdentityClaims(UUID accountId) {
+        return userRepository.findByAccountId(accountId)
+                .map(this::toClaims);
+    }
+
+    private CRMIdentityClaims toClaims(User user) {
         return new CRMIdentityClaims(user.getOrganizationId(), user.getRole().name(), user.getPublicId());
     }
 }
