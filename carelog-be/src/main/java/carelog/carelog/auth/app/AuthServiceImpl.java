@@ -5,8 +5,8 @@ import carelog.carelog.auth.app.port.*;
 import carelog.carelog.auth.web.dto.request.*;
 import carelog.carelog.auth.web.dto.response.*;
 import carelog.carelog.common.web.exception.*;
-import lombok.*;
 import lombok.extern.slf4j.*;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.*;
 import org.springframework.transaction.annotation.*;
 
@@ -15,7 +15,6 @@ import java.util.UUID;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class AuthServiceImpl implements AuthService {
     // Identity 경계 Port에만 의존한다. 기존 CRM 직접 결합(인증/조회/세션)은 Adapter 뒤로 숨겼다.
@@ -25,6 +24,48 @@ public class AuthServiceImpl implements AuthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final TokenBlacklistPort tokenBlacklistPort;
     private final Clock clock;
+    private final AuthTokenIssuanceService authTokenIssuanceService;
+
+    @Autowired
+    public AuthServiceImpl(
+            CredentialPort credentialPort,
+            CRMIdentityProjectionPort crmIdentityProjectionPort,
+            TokenSessionPort tokenSessionPort,
+            JwtTokenProvider jwtTokenProvider,
+            TokenBlacklistPort tokenBlacklistPort,
+            Clock clock,
+            AuthTokenIssuanceService authTokenIssuanceService
+    ) {
+        this.credentialPort = credentialPort;
+        this.crmIdentityProjectionPort = crmIdentityProjectionPort;
+        this.tokenSessionPort = tokenSessionPort;
+        this.jwtTokenProvider = jwtTokenProvider;
+        this.tokenBlacklistPort = tokenBlacklistPort;
+        this.clock = clock;
+        this.authTokenIssuanceService = authTokenIssuanceService;
+    }
+
+    /**
+     * 기존 단위 테스트와 생성자 호출부의 호환을 위한 보조 생성자다.
+     */
+    public AuthServiceImpl(
+            CredentialPort credentialPort,
+            CRMIdentityProjectionPort crmIdentityProjectionPort,
+            TokenSessionPort tokenSessionPort,
+            JwtTokenProvider jwtTokenProvider,
+            TokenBlacklistPort tokenBlacklistPort,
+            Clock clock
+    ) {
+        this(
+                credentialPort,
+                crmIdentityProjectionPort,
+                tokenSessionPort,
+                jwtTokenProvider,
+                tokenBlacklistPort,
+                clock,
+                new AuthTokenIssuanceService(jwtTokenProvider, tokenSessionPort)
+        );
+    }
 
 
     @Override
@@ -33,24 +74,10 @@ public class AuthServiceImpl implements AuthService {
         // 1. 인증 (인증 실패는 Port가 기존과 동일하게 INVALID_CREDENTIALS로 매핑)
         UserPrincipal principal = credentialPort.authenticate(request.userId(), request.password());
 
-        // 2. 토큰 생성 (organizationId/role/publicId claim 의미 불변, subject는 accountId — B0)
-        String accessToken = jwtTokenProvider.generateAccessToken(
-                principal.getAccountId(),
-                principal.getOrganizationId(),
-                principal.getRole(),
-                principal.getPublicId()
-        );
-        String refreshToken =
-                jwtTokenProvider.generateRefreshToken(principal.getAccountId());
+        // 2. 토큰 생성과 Refresh Session 교체는 Password/OAuth 공통 유스케이스에 위임한다.
+        var tokens = authTokenIssuanceService.issueForPrincipal(principal);
 
-        // 3. Refresh Session 교체 (기존 delete → save 순서 보존, 키는 accountId)
-        tokenSessionPort.replaceForAccount(
-                principal.getAccountId(),
-                refreshToken,
-                jwtTokenProvider.getRefreshTokenExpiryDate()
-        );
-
-        return new LoginResponse(accessToken, refreshToken);
+        return new LoginResponse(tokens.accessToken(), tokens.refreshToken());
     }
 
     @Override
