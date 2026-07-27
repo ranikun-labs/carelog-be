@@ -38,14 +38,14 @@ public class OAuthAuthorizationService {
         URI redirectUri = redirectUriResolver.resolve(providerCode, command.clientChannel());
         String returnTo = returnToValidator.validate(command.returnTo());
         String state = generateState();
-        PkceChallenge pkce = PkceChallenge.generate();
+        PkceChallenge pkce = provider.supportsPkce() ? PkceChallenge.generate() : null;
         String nonce = provider.requiresNonce() ? generateRandomValue() : null;
 
         OAuthStateRecord record = new OAuthStateRecord(
                 providerCode,
                 redirectUri,
                 returnTo,
-                pkce.codeVerifier(),
+                pkce != null ? pkce.codeVerifier() : null,
                 nonce,
                 Instant.now(clock)
         );
@@ -55,8 +55,8 @@ public class OAuthAuthorizationService {
                 providerCode,
                 redirectUri,
                 state,
-                pkce.codeChallenge(),
-                pkce.method(),
+                pkce != null ? pkce.codeChallenge() : null,
+                pkce != null ? pkce.method() : null,
                 nonce
         ));
         return new AuthorizationUrlResult(authorizationUrl, state);

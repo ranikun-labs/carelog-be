@@ -55,4 +55,3 @@ logging:
     carelog.carelog: INFO
     org.springframework.security: WARN
     org.hibernate.type.descriptor.sql: WARN
-
