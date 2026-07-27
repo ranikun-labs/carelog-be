@@ -48,9 +48,6 @@ public class KakaoOAuthProviderAdapter implements OAuthProviderPort {
             builder.queryParam("code_challenge", request.codeChallenge())
                     .queryParam("code_challenge_method", request.codeChallengeMethod());
         }
-        if (properties.getScope() != null && !properties.getScope().isBlank()) {
-            builder.queryParam("scope", properties.getScope());
-        }
         return builder.build().encode().toUri();
     }
 

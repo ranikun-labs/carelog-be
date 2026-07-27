@@ -7,7 +7,6 @@ import org.springframework.context.annotation.Conditional;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
-import java.time.Duration;
 import java.net.http.HttpClient;
 
 /** Kakao API에만 사용하는 timeout 고정 RestClient다. */
@@ -17,12 +16,12 @@ import java.net.http.HttpClient;
 public class KakaoOAuthClientConfig {
 
     @Bean
-    RestClient kakaoOAuthRestClient() {
+    RestClient kakaoOAuthRestClient(KakaoOAuthProperties properties) {
         HttpClient httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(2))
+                .connectTimeout(properties.getConnectTimeout())
                 .build();
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
-        factory.setReadTimeout(Duration.ofSeconds(3));
+        factory.setReadTimeout(properties.getReadTimeout());
         return RestClient.builder().requestFactory(factory).build();
     }
 }

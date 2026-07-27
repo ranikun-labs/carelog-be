@@ -15,7 +15,10 @@ public class KakaoOAuthConfiguredCondition implements Condition {
             "carelog.auth.oauth.kakao.token-uri",
             "carelog.auth.oauth.kakao.user-info-uri",
             "oauth.redirect-uris.kakao.WEB",
-            "oauth.redirect-uris.kakao.MOBILE"
+            "oauth.redirect-uris.kakao.MOBILE",
+            "carelog.auth.oauth.kakao.client-secret",
+            "carelog.auth.oauth.kakao.connect-timeout",
+            "carelog.auth.oauth.kakao.read-timeout"
     );
 
     @Override
@@ -26,7 +29,9 @@ public class KakaoOAuthConfiguredCondition implements Condition {
         if (configured == 0) {
             return false;
         }
-        if (configured != REQUIRED_PROPERTIES.size()) {
+        long requiredConfigured = REQUIRED_PROPERTIES.subList(0, 6).stream()
+                .filter(key -> hasText(context.getEnvironment().getProperty(key))).count();
+        if (requiredConfigured != 6) {
             throw new IllegalStateException("Kakao OAuth 설정은 모두 제공하거나 모두 생략해야 합니다.");
         }
         return true;

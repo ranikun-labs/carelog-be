@@ -57,14 +57,21 @@ public class KakaoOAuthApiClient {
     }
 
     public KakaoUserResponse fetchUser(String accessToken) {
+        try {
+            return userRequest(accessToken);
+        } catch (ResourceAccessException firstFailure) {
+            if (!hasConnectCause(firstFailure)) throw errorMapper.unavailable(firstFailure);
+            return fetchUserRetry(accessToken);
+        } catch (RestClientResponseException ex) {
+            throw errorMapper.userInfoFailure(ex.getStatusCode().value());
+        } catch (RuntimeException ex) {
+            throw errorMapper.principalUnverified(ex);
+        }
+    }
+
+    private KakaoUserResponse fetchUserRetry(String accessToken) {
         try { return userRequest(accessToken); }
-        catch (ResourceAccessException ex) {
-            if (hasConnectCause(ex)) {
-                try { return userRequest(accessToken); }
-                catch (ResourceAccessException retryFailure) { throw errorMapper.unavailable(retryFailure); }
-            }
-            throw errorMapper.unavailable(ex);
-        } catch (OAuthProviderException ex) { throw ex; }
+        catch (ResourceAccessException ex) { throw errorMapper.unavailable(ex); }
         catch (RestClientResponseException ex) { throw errorMapper.userInfoFailure(ex.getStatusCode().value()); }
         catch (RuntimeException ex) { throw errorMapper.principalUnverified(ex); }
     }
