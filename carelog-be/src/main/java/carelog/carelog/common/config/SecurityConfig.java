@@ -4,6 +4,7 @@ import carelog.carelog.auth.web.*;
 import lombok.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.*;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.*;
 import org.springframework.security.config.annotation.authentication.configuration.*;
 import org.springframework.security.config.annotation.method.configuration.*;
@@ -54,6 +55,11 @@ public class SecurityConfig {
                 )
 
                 .authorizeHttpRequests(auth -> auth
+                                .requestMatchers(
+                                        HttpMethod.POST,
+                                        "/auth/oauth/kakao/authorization",
+                                        "/auth/oauth/kakao/exchange"
+                                ).permitAll()
                                 .requestMatchers(PUBLIC_URLS).permitAll()
                                 .anyRequest().authenticated()
                         // 운영용이라 차후에 활성화

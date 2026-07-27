@@ -1,10 +1,13 @@
 package carelog.carelog.auth.web;
 
 import carelog.carelog.auth.app.*;
+import carelog.carelog.auth.app.oauth.*;
+import carelog.carelog.auth.app.port.oauth.*;
 import carelog.carelog.auth.web.dto.request.*;
 import carelog.carelog.auth.web.dto.response.*;
 import carelog.carelog.common.web.dto.response.*;
 import carelog.carelog.common.web.dto.response.ApiResponse;
+import carelog.carelog.common.web.exception.*;
 import io.swagger.v3.oas.annotations.*;
 import io.swagger.v3.oas.annotations.media.*;
 import io.swagger.v3.oas.annotations.responses.*;
@@ -15,7 +18,7 @@ import org.springframework.http.*;
 import org.springframework.security.core.*;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.UUID;
+import java.util.*;
 
 @Tag(name = "인증", description = "로그인, 로그아웃, 토큰 갱신 API")
 @RestController
@@ -24,6 +27,8 @@ import java.util.UUID;
 public class AuthController {
 
     private final AuthService authService;
+    private final OAuthAuthorizationService oAuthAuthorizationService;
+    private final OAuthLoginService oAuthLoginService;
 
     @Operation(summary = "로그인", description = "사용자 ID와 비밀번호로 로그인하여 JWT 토큰을 발급받습니다.")
     @ApiResponses({
@@ -76,5 +81,69 @@ public class AuthController {
     ) {
         TokenRefreshResponse response = authService.refreshToken(request);
         return ApiResponse.ok(response);
+    }
+
+    @PostMapping("/oauth/kakao/authorization")
+    public ResponseEntity<ApiResponse<KakaoAuthorizationResponse>> startKakaoAuthorization(
+            @Valid @RequestBody KakaoAuthorizationRequest request
+    ) {
+        OAuthAuthorizationService.AuthorizationUrlResult result =
+                oAuthAuthorizationService.startAuthorization(
+                        new OAuthAuthorizationCommand(
+                                "kakao",
+                                request.clientChannel(),
+                                request.returnTo()
+                        )
+                );
+        return ApiResponse.ok(
+                new KakaoAuthorizationResponse(result.authorizationUrl().toString())
+        );
+    }
+
+    @PostMapping("/oauth/kakao/exchange")
+    public ResponseEntity<ApiResponse<KakaoExchangeResponse>> exchangeKakaoCode(
+            @Valid @RequestBody KakaoExchangeRequest request
+    ) {
+        OAuthLoginResult result = oAuthLoginService.completeLogin(
+                new OAuthCallbackCommand(
+                        "kakao",
+                        request.code(),
+                        request.state()
+                )
+        );
+        return ApiResponse.ok(toKakaoExchangeResponse(result));
+    }
+
+    private KakaoExchangeResponse toKakaoExchangeResponse(OAuthLoginResult result) {
+        if (result instanceof OAuthLoginResult.ExistingAccountAuthenticated authenticated) {
+            return new KakaoExchangeResponse(
+                    authenticated.tokens().accessToken(),
+                    authenticated.tokens().refreshToken()
+            );
+        }
+
+        if (result instanceof OAuthLoginResult.NewAccountOnboardingRequired ignored) {
+            throw new CustomException(ExceptionStatus.OAUTH_ACCOUNT_NOT_LINKED);
+        }
+
+        if (result instanceof OAuthLoginResult.ExternalIdentityConflict conflict) {
+            if (conflict.reason() == OAuthLoginResult.ConflictReason.ACCOUNT_INACTIVE) {
+                throw new CustomException(ExceptionStatus.OAUTH_IDENTITY_CONFLICT);
+            }
+
+            if (conflict.reason() == OAuthLoginResult.ConflictReason.ORPHANED_IDENTITY) {
+                throw new CustomException(ExceptionStatus.OAUTH_IDENTITY_CONFLICT);
+            }
+        }
+
+        if (result instanceof OAuthLoginResult.ProviderAuthenticationFailed ignored) {
+            throw new CustomException(ExceptionStatus.OAUTH_PROVIDER_AUTH_FAILED);
+        }
+
+        if (result instanceof OAuthLoginResult.InvalidOrExpiredState) {
+            throw new CustomException(ExceptionStatus.INVALID_OAUTH_STATE);
+        }
+
+        throw new IllegalStateException("지원하지 않는 OAuth 로그인 결과입니다.");
     }
 }
