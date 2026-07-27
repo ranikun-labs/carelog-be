@@ -10,8 +10,10 @@ import carelog.carelog.auth.app.port.oauth.OAuthAuthorizationCommand;
 import carelog.carelog.auth.app.port.oauth.OAuthCallbackCommand;
 import carelog.carelog.auth.app.port.oauth.OAuthLoginResult;
 import carelog.carelog.auth.app.port.oauth.OAuthStateStoreUnavailableException;
+import carelog.carelog.auth.web.dto.request.KakaoExchangeRequest;
 import carelog.carelog.common.web.exception.ExceptionStatus;
 import carelog.carelog.common.web.exception.GlobalExceptionHandler;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -188,6 +190,26 @@ class AuthControllerTest {
         mockMvc.perform(kakaoExchangeRequest())
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.message").value("서버에 예상치 못한 오류가 발생했습니다."));
+    }
+
+    @DisplayName("Kakao 교환 요청은 JSON 계약을 유지하면서 문자열 표현에서 code와 state를 숨긴다")
+    @Test
+    void kakaoExchangeRequest_redactsSensitiveValuesFromToString() throws Exception {
+        String authorizationCode = "identifiable-authorization-code-7f42";
+        String authorizationState = "identifiable-callback-state-9a31";
+
+        KakaoExchangeRequest request = new ObjectMapper().readValue("""
+                {
+                  "code": "identifiable-authorization-code-7f42",
+                  "state": "identifiable-callback-state-9a31"
+                }
+                """, KakaoExchangeRequest.class);
+
+        assertThat(request.code()).isEqualTo(authorizationCode);
+        assertThat(request.state()).isEqualTo(authorizationState);
+        assertThat(request.toString())
+                .doesNotContain(authorizationCode, authorizationState)
+                .contains("code=REDACTED", "state=REDACTED");
     }
 
     private static org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder kakaoExchangeRequest() {

@@ -13,4 +13,8 @@ public record KakaoExchangeRequest(
     @NotBlank(message = "state는 필수입니다")
     String state
 ) {
+    @Override
+    public String toString() {
+        return "KakaoExchangeRequest[code=REDACTED, state=REDACTED]";
+    }
 }
