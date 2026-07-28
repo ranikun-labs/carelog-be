@@ -88,8 +88,9 @@ flowchart LR
         gateway --> redis[(Redis: one instance)]
         auth --> redis
         core --> postgres[(PostgreSQL: one instance)]
-        ai -. future provider call .-> provider[External Model Provider]
     end
+    provider[External Model Provider]
+    ai -. future provider call .-> provider
     tunnel --> connector
 ```
 
