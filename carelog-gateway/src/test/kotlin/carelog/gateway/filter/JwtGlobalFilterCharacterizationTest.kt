@@ -65,7 +65,12 @@ class JwtGlobalFilterCharacterizationTest {
             ),
             internalSecret = internalSecret
         )
-        filter = JwtGlobalFilter(JwtVerifier(secret), blacklistService, gatewayConfig)
+        filter = JwtGlobalFilter(
+            JwtVerifier(secret),
+            blacklistService,
+            gatewayConfig,
+            OAuthPublicRequestMatcher()
+        )
         capturedExchange = null
     }
 
@@ -124,6 +129,53 @@ class JwtGlobalFilterCharacterizationTest {
 
         assertThat(capturedExchange).isNotNull()
         assertThat(headerOf("X-Gateway-Secret")).isEqualTo(internalSecret)
+        verifyNoInteractions(redisTemplate)
+    }
+
+    @DisplayName("Kakao OAuth의 정확한 POST 두 경로는 JWT 없이 Gateway Secret만 주입한다")
+    @ParameterizedTest
+    @ValueSource(strings = [
+        "/api/v1/auth/oauth/kakao/authorization",
+        "/api/v1/auth/oauth/kakao/exchange"
+    ])
+    fun exactKakaoOAuthPost_skipsAuthenticationAndRemovesSpoofedHeaders(path: String) {
+        val ex = exchange(
+            HttpMethod.POST,
+            path,
+            mapOf(
+                "X-User-Id" to "spoofed-user",
+                "X-Organization-Id" to "spoofed-org",
+                "X-Public-Id" to "spoofed-public",
+                "X-Gateway-Secret" to "spoofed-secret"
+            )
+        )
+
+        filter.filter(ex, chain).block()
+
+        assertThat(capturedExchange).isNotNull()
+        assertThat(headerOf("X-Gateway-Secret")).isEqualTo(internalSecret)
+        assertThat(headerOf("X-User-Id")).isNull()
+        assertThat(headerOf("X-Organization-Id")).isNull()
+        assertThat(headerOf("X-Public-Id")).isNull()
+        verifyNoInteractions(redisTemplate)
+    }
+
+    @DisplayName("Kakao OAuth의 GET, 변경 메서드와 유사 경로는 공개 처리되지 않는다")
+    @ParameterizedTest
+    @ValueSource(strings = [
+        "GET /api/v1/auth/oauth/kakao/authorization",
+        "PUT /api/v1/auth/oauth/kakao/exchange",
+        "POST /api/v1/auth/oauth/kakao/authorization/extra",
+        "POST /api/v1/auth/oauth/kakao/link"
+    ])
+    fun nonExactKakaoOAuthRequest_requiresJwt(value: String) {
+        val (method, path) = value.split(" ", limit = 2)
+        val ex = exchange(HttpMethod.valueOf(method), path)
+
+        filter.filter(ex, chain).block()
+
+        assertThat(ex.response.statusCode).isEqualTo(HttpStatus.UNAUTHORIZED)
+        assertThat(capturedExchange).isNull()
         verifyNoInteractions(redisTemplate)
     }
 
