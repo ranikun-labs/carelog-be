@@ -8,6 +8,12 @@ import carelog.carelog.auth.app.port.oauth.OAuthProviderPort;
 import carelog.carelog.auth.app.port.oauth.OAuthStateRecord;
 import carelog.carelog.auth.app.port.oauth.OAuthStateStore;
 import carelog.carelog.auth.app.port.oauth.OAuthTokenGrant;
+import carelog.carelog.auth.app.port.productclient.Product;
+import carelog.carelog.auth.app.port.productclient.ProductClientReader;
+import carelog.carelog.auth.app.port.productclient.ProductClientChannel;
+import carelog.carelog.auth.app.port.productclient.RegisteredProductClient;
+import carelog.carelog.common.web.exception.CustomException;
+import carelog.carelog.common.web.exception.ExceptionStatus;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.env.MockEnvironment;
 
@@ -32,6 +38,7 @@ class OAuthAuthorizationServiceTest {
         OAuthAuthorizationService service = new OAuthAuthorizationService(
                 new OAuthProviderRegistry(List.of(provider)),
                 new OAuthRedirectUriResolver(environment),
+                defaultClientResolver(),
                 new ReturnToValidator(List.of()),
                 store,
                 environment,
@@ -101,11 +108,66 @@ class OAuthAuthorizationServiceTest {
         return new OAuthAuthorizationService(
                 new OAuthProviderRegistry(List.of(provider)),
                 new OAuthRedirectUriResolver(environment),
+                defaultClientResolver(),
                 new ReturnToValidator(List.of()),
                 store,
                 environment,
                 Clock.fixed(Instant.parse("2026-07-27T00:00:00Z"), ZoneOffset.UTC)
         );
+    }
+
+    @Test
+    void 알수없는_Product_Client는_Provider를_선택하기_전에_거부한다() {
+        CapturingProvider provider = new CapturingProvider(false);
+        ProductClientReader unknownClient = clientId -> {
+            throw new CustomException(ExceptionStatus.UNKNOWN_PRODUCT_CLIENT);
+        };
+        OAuthAuthorizationService service = new OAuthAuthorizationService(
+                new OAuthProviderRegistry(List.of(provider)),
+                new OAuthRedirectUriResolver(new MockEnvironment().withProperty(
+                        "oauth.redirect-uris.neutral.WEB", "https://app.example.com/callback")),
+                new OAuthProductClientCompatibilityResolver(unknownClient),
+                new ReturnToValidator(List.of()),
+                new CapturingStateStore(),
+                new MockEnvironment(),
+                Clock.systemUTC()
+        );
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.startAuthorization(
+                new OAuthAuthorizationCommand("neutral", ClientChannel.WEB, "/", "unknown-client")
+        )).isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("exceptionStatus", ExceptionStatus.UNKNOWN_PRODUCT_CLIENT);
+        assertThat(provider.request).isNull();
+    }
+
+    @Test
+    void 비활성_Product_Client는_Provider를_선택하기_전에_거부한다() {
+        CapturingProvider provider = new CapturingProvider(false);
+        ProductClientReader disabledClient = clientId -> {
+            throw new CustomException(ExceptionStatus.DISABLED_PRODUCT_CLIENT);
+        };
+        OAuthAuthorizationService service = new OAuthAuthorizationService(
+                new OAuthProviderRegistry(List.of(provider)),
+                new OAuthRedirectUriResolver(new MockEnvironment().withProperty(
+                        "oauth.redirect-uris.neutral.WEB", "https://app.example.com/callback")),
+                new OAuthProductClientCompatibilityResolver(disabledClient),
+                new ReturnToValidator(List.of()),
+                new CapturingStateStore(),
+                new MockEnvironment(),
+                Clock.systemUTC()
+        );
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.startAuthorization(
+                new OAuthAuthorizationCommand("neutral", ClientChannel.WEB, "/", "disabled-client")
+        )).isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("exceptionStatus", ExceptionStatus.DISABLED_PRODUCT_CLIENT);
+        assertThat(provider.request).isNull();
+    }
+
+    private OAuthProductClientCompatibilityResolver defaultClientResolver() {
+        return new OAuthProductClientCompatibilityResolver(clientId -> new RegisteredProductClient(
+                clientId, Product.CARELOG, ProductClientChannel.WEB
+        ));
     }
 
     private static class CapturingStateStore implements OAuthStateStore {
