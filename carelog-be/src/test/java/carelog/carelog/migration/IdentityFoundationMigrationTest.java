@@ -11,6 +11,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -141,9 +142,9 @@ class IdentityFoundationMigrationTest {
         }
     }
 
-    @DisplayName("V6은 CARELOG WEB 기본 Client를 한 번 등록하고 clientId·enum 제약을 강제한다")
+    @DisplayName("V6은 CARELOG WEB·MOBILE 기본 Client를 한 번 등록하고 clientId·enum 제약을 강제한다")
     @Test
-    void productClientRegistryMigration_seedsCarelogWebAndEnforcesConstraints() throws Exception {
+    void productClientRegistryMigration_seedsCarelogWebAndMobileAndEnforcesConstraints() throws Exception {
         String jdbcUrl = createDatabase("product_client_registry_db");
         Flyway.configure().dataSource(jdbcUrl, POSTGRES.getUsername(), POSTGRES.getPassword()).load().migrate();
 
@@ -160,6 +161,17 @@ class IdentityFoundationMigrationTest {
                 }
             }
 
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT product, channel, enabled FROM product_clients WHERE client_id = ?")) {
+                ps.setString(1, "carelog-mobile");
+                try (ResultSet rs = ps.executeQuery()) {
+                    assertThat(rs.next()).isTrue();
+                    assertThat(rs.getString("product")).isEqualTo("CARELOG");
+                    assertThat(rs.getString("channel")).isEqualTo("MOBILE");
+                    assertThat(rs.getBoolean("enabled")).isTrue();
+                }
+            }
+
             assertThatThrownBy(() -> {
                 try (PreparedStatement ps = conn.prepareStatement(
                         "INSERT INTO product_clients (client_id, product, channel, enabled, created_at, updated_at) " +
@@ -172,7 +184,8 @@ class IdentityFoundationMigrationTest {
                     ps.setObject(6, now);
                     ps.executeUpdate();
                 }
-            }).isInstanceOf(Exception.class);
+            }).isInstanceOfSatisfying(SQLException.class, exception ->
+                    assertThat(exception.getSQLState()).isEqualTo("23505"));
 
             assertThatThrownBy(() -> {
                 try (PreparedStatement ps = conn.prepareStatement(
@@ -180,13 +193,29 @@ class IdentityFoundationMigrationTest {
                                 "VALUES (?, ?, ?, ?, ?, ?)")) {
                     ps.setString(1, "invalid-channel");
                     ps.setString(2, "CARELOG");
-                    ps.setString(3, "MOBILE");
+                    ps.setString(3, "DESKTOP");
                     ps.setBoolean(4, true);
                     ps.setObject(5, now);
                     ps.setObject(6, now);
                     ps.executeUpdate();
                 }
-            }).isInstanceOf(Exception.class);
+            }).isInstanceOfSatisfying(SQLException.class, exception ->
+                    assertThat(exception.getSQLState()).isEqualTo("23514"));
+
+            assertThatThrownBy(() -> {
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "INSERT INTO product_clients (client_id, product, channel, enabled, created_at, updated_at) " +
+                                "VALUES (?, ?, ?, ?, ?, ?)")) {
+                    ps.setString(1, "invalid client id");
+                    ps.setString(2, "CARELOG");
+                    ps.setString(3, "WEB");
+                    ps.setBoolean(4, true);
+                    ps.setObject(5, now);
+                    ps.setObject(6, now);
+                    ps.executeUpdate();
+                }
+            }).isInstanceOfSatisfying(SQLException.class, exception ->
+                    assertThat(exception.getSQLState()).isEqualTo("23514"));
         }
     }
 

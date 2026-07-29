@@ -50,7 +50,8 @@ class AuthBoundaryArchitectureTest {
      * 규칙 2 — Port 인터페이스는 구현 세부 타입을 경계 밖으로 노출하면 안 된다.
      *
      * <p>Port 의 입력·출력은 내부 계약 DTO / VO / primitive·identifier 여야 한다.
-     * 따라서 CRM Entity/Repository, Auth 영속화 타입, ORM/Spring Data 전용 타입에 의존하면 안 된다.
+     * 따라서 CRM Entity/Repository, Auth 영속 Entity/Repository, ORM/Spring Data 전용 타입에 의존하면 안 된다.
+     * ProductClient의 Domain Enum은 Port 계약의 값 타입으로 허용한다.
      */
     @ArchTest
     static final ArchRule port는_Entity_Repository_ORM_타입을_노출하지_않는다 =
@@ -58,12 +59,18 @@ class AuthBoundaryArchitectureTest {
                     .that().resideInAPackage("carelog.carelog.auth.app.port..")
                     .should().dependOnClassesThat().resideInAnyPackage(
                             "carelog.carelog.user..",            // CRM JPA Entity / Repository
-                            "carelog.carelog.auth.domain..",     // RefreshToken Entity / Repository
                             "jakarta.persistence..",             // ORM 전용 타입
                             "org.hibernate..",                   // ORM 전용 타입
                             "org.springframework.data.."         // Repository 추상 타입
                     )
-                    .because("Port 계약은 내부 DTO/VO/primitive만 노출해야 한다");
+                    .because("Port 계약은 CRM·영속 구현·ORM 타입을 노출하면 안 된다");
+
+    @ArchTest
+    static final ArchRule domain은_application_계층에_의존하지_않는다 =
+            noClasses()
+                    .that().resideInAPackage("carelog.carelog.auth.domain..")
+                    .should().dependOnClassesThat().resideInAPackage("carelog.carelog.auth.app..")
+                    .because("Domain은 Application 계층에 의존하면 안 된다");
 
     /**
      * 규칙 3 — Auth Application(코어 + Port) 은 Adapter 구현체에 역으로 의존하면 안 된다.

@@ -8,10 +8,10 @@ import carelog.carelog.auth.app.port.oauth.OAuthProviderPort;
 import carelog.carelog.auth.app.port.oauth.OAuthStateRecord;
 import carelog.carelog.auth.app.port.oauth.OAuthStateStore;
 import carelog.carelog.auth.app.port.oauth.OAuthTokenGrant;
-import carelog.carelog.auth.app.port.productclient.Product;
 import carelog.carelog.auth.app.port.productclient.ProductClientReader;
-import carelog.carelog.auth.app.port.productclient.ProductClientChannel;
 import carelog.carelog.auth.app.port.productclient.RegisteredProductClient;
+import carelog.carelog.auth.domain.Product;
+import carelog.carelog.auth.domain.ProductClientChannel;
 import carelog.carelog.common.web.exception.CustomException;
 import carelog.carelog.common.web.exception.ExceptionStatus;
 import org.junit.jupiter.api.Test;
@@ -102,6 +102,22 @@ class OAuthAuthorizationServiceTest {
         assertThat(provider.request.codeChallengeMethod()).isNull();
     }
 
+    @Test
+    void 기존_MOBILE_요청은_MOBILE_기본_Client_검증_후_기존_Redirect를_선택한다() {
+        CapturingStateStore store = new CapturingStateStore();
+        CapturingProvider provider = new CapturingProvider(false);
+        MockEnvironment environment = new MockEnvironment()
+                .withProperty("oauth.redirect-uris.neutral.MOBILE", "carelog://oauth/callback")
+                .withProperty("oauth.state.ttl", "5m");
+
+        service(provider, store, environment).startAuthorization(
+                new OAuthAuthorizationCommand("neutral", ClientChannel.MOBILE, "/")
+        );
+
+        assertThat(provider.request.redirectUri()).isEqualTo(URI.create("carelog://oauth/callback"));
+        assertThat(store.record.redirectUri()).isEqualTo(URI.create("carelog://oauth/callback"));
+    }
+
     private OAuthAuthorizationService service(
             CapturingProvider provider, CapturingStateStore store, MockEnvironment environment
     ) {
@@ -164,10 +180,39 @@ class OAuthAuthorizationServiceTest {
         assertThat(provider.request).isNull();
     }
 
+    @Test
+    void 비활성_Carelog_MOBILE_Client는_Provider를_선택하기_전에_거부한다() {
+        CapturingProvider provider = new CapturingProvider(false);
+        ProductClientReader disabledMobileClient = clientId -> {
+            assertThat(clientId).isEqualTo(OAuthProductClientCompatibilityResolver.DEFAULT_CARELOG_MOBILE_CLIENT_ID);
+            throw new CustomException(ExceptionStatus.DISABLED_PRODUCT_CLIENT);
+        };
+        OAuthAuthorizationService service = new OAuthAuthorizationService(
+                new OAuthProviderRegistry(List.of(provider)),
+                new OAuthRedirectUriResolver(new MockEnvironment().withProperty(
+                        "oauth.redirect-uris.neutral.MOBILE", "carelog://oauth/callback")),
+                new OAuthProductClientCompatibilityResolver(disabledMobileClient),
+                new ReturnToValidator(List.of()),
+                new CapturingStateStore(),
+                new MockEnvironment(),
+                Clock.systemUTC()
+        );
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.startAuthorization(
+                new OAuthAuthorizationCommand("neutral", ClientChannel.MOBILE, "/")
+        )).isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("exceptionStatus", ExceptionStatus.DISABLED_PRODUCT_CLIENT);
+        assertThat(provider.request).isNull();
+    }
+
     private OAuthProductClientCompatibilityResolver defaultClientResolver() {
-        return new OAuthProductClientCompatibilityResolver(clientId -> new RegisteredProductClient(
-                clientId, Product.CARELOG, ProductClientChannel.WEB
-        ));
+        return new OAuthProductClientCompatibilityResolver(clientId -> switch (clientId) {
+            case OAuthProductClientCompatibilityResolver.DEFAULT_CARELOG_WEB_CLIENT_ID ->
+                    new RegisteredProductClient(clientId, Product.CARELOG, ProductClientChannel.WEB);
+            case OAuthProductClientCompatibilityResolver.DEFAULT_CARELOG_MOBILE_CLIENT_ID ->
+                    new RegisteredProductClient(clientId, Product.CARELOG, ProductClientChannel.MOBILE);
+            default -> throw new CustomException(ExceptionStatus.UNKNOWN_PRODUCT_CLIENT);
+        });
     }
 
     private static class CapturingStateStore implements OAuthStateStore {

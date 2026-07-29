@@ -2,10 +2,10 @@ package carelog.carelog.auth.app.oauth;
 
 import carelog.carelog.auth.app.port.oauth.ClientChannel;
 import carelog.carelog.auth.app.port.oauth.OAuthAuthorizationCommand;
-import carelog.carelog.auth.app.port.productclient.Product;
 import carelog.carelog.auth.app.port.productclient.ProductClientReader;
-import carelog.carelog.auth.app.port.productclient.ProductClientChannel;
 import carelog.carelog.auth.app.port.productclient.RegisteredProductClient;
+import carelog.carelog.auth.domain.Product;
+import carelog.carelog.auth.domain.ProductClientChannel;
 import carelog.carelog.common.web.exception.CustomException;
 import carelog.carelog.common.web.exception.ExceptionStatus;
 import org.junit.jupiter.api.Test;
@@ -26,6 +26,20 @@ class OAuthProductClientCompatibilityResolverTest {
         );
 
         assertThat(result.clientId()).isEqualTo(OAuthProductClientCompatibilityResolver.DEFAULT_CARELOG_WEB_CLIENT_ID);
+    }
+
+    @Test
+    void 기존_MOBILE_요청은_Carelog_MOBILE_기본_Client로_해석한다() {
+        ProductClientReader reader = clientId -> new RegisteredProductClient(
+                clientId, Product.CARELOG, ProductClientChannel.MOBILE
+        );
+
+        RegisteredProductClient result = new OAuthProductClientCompatibilityResolver(reader).resolve(
+                new OAuthAuthorizationCommand("kakao", ClientChannel.MOBILE, "/")
+        );
+
+        assertThat(result.clientId()).isEqualTo(OAuthProductClientCompatibilityResolver.DEFAULT_CARELOG_MOBILE_CLIENT_ID);
+        assertThat(result.channel()).isEqualTo(ProductClientChannel.MOBILE);
     }
 
     @Test

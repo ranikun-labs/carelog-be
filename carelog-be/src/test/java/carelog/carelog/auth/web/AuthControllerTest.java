@@ -87,6 +87,34 @@ class AuthControllerTest {
         );
     }
 
+    @DisplayName("기존 MOBILE Kakao authorization 요청은 공개 DTO 변경 없이 전달한다")
+    @Test
+    void startKakaoAuthorization_preservesLegacyMobileContract() throws Exception {
+        when(authorizationService.startAuthorization(any())).thenReturn(
+                new OAuthAuthorizationService.AuthorizationUrlResult(
+                        URI.create("https://kauth.kakao.com/oauth/authorize?state=mobile-state"),
+                        "mobile-state"
+                )
+        );
+
+        mockMvc.perform(post("/api/v1/auth/oauth/kakao/authorization")
+                        .contextPath("/api/v1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"clientChannel":"MOBILE","returnTo":"/journals/42"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.authorizationUrl").value(
+                        "https://kauth.kakao.com/oauth/authorize?state=mobile-state"));
+
+        ArgumentCaptor<OAuthAuthorizationCommand> commandCaptor =
+                ArgumentCaptor.forClass(OAuthAuthorizationCommand.class);
+        verify(authorizationService).startAuthorization(commandCaptor.capture());
+        assertThat(commandCaptor.getValue()).isEqualTo(
+                new OAuthAuthorizationCommand("kakao", ClientChannel.MOBILE, "/journals/42")
+        );
+    }
+
     @DisplayName("연결된 Kakao 계정은 Carelog accessToken과 refreshToken만 반환한다")
     @Test
     void exchangeKakaoCode_existingAccount_returnsCarelogTokens() throws Exception {

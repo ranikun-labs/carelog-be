@@ -1,13 +1,15 @@
 package carelog.carelog.auth.app.productclient;
 
 import carelog.carelog.auth.app.port.productclient.RegisteredProductClient;
-import carelog.carelog.auth.app.port.productclient.Product;
-import carelog.carelog.auth.app.port.productclient.ProductClientChannel;
+import carelog.carelog.auth.domain.Product;
 import carelog.carelog.auth.domain.ProductClient;
+import carelog.carelog.auth.domain.ProductClientChannel;
 import carelog.carelog.auth.domain.ProductClientRepository;
 import carelog.carelog.common.web.exception.CustomException;
 import carelog.carelog.common.web.exception.ExceptionStatus;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -39,6 +41,21 @@ class ProductClientRegistryServiceTest {
     @Test
     void 빈_ClientId는_거부한다() {
         assertThatThrownBy(() -> service().requireEnabled(" "))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("exceptionStatus", ExceptionStatus.INVALID_PRODUCT_CLIENT_ID);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {" carelog", "carelog ", "care log", "CARELOG", "carelog!", "cárelog"})
+    void ClientId_형식_위반은_조회_전에_거부한다(String invalidClientId) {
+        assertThatThrownBy(() -> service().requireEnabled(invalidClientId))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("exceptionStatus", ExceptionStatus.INVALID_PRODUCT_CLIENT_ID);
+    }
+
+    @Test
+    void null_ClientId는_거부한다() {
+        assertThatThrownBy(() -> service().requireEnabled(null))
                 .isInstanceOf(CustomException.class)
                 .hasFieldOrPropertyWithValue("exceptionStatus", ExceptionStatus.INVALID_PRODUCT_CLIENT_ID);
     }
