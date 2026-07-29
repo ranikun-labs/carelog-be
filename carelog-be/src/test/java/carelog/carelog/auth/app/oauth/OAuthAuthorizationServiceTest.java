@@ -205,6 +205,26 @@ class OAuthAuthorizationServiceTest {
         assertThat(provider.request).isNull();
     }
 
+    @Test
+    void callback_mapping이_없으면_Provider_authorization_URL을_만들기_전에_거부한다() {
+        CapturingProvider provider = new CapturingProvider(false);
+        OAuthAuthorizationService service = new OAuthAuthorizationService(
+                new OAuthProviderRegistry(List.of(provider)),
+                new OAuthRedirectUriResolver(new MockEnvironment()),
+                defaultClientResolver(),
+                new ReturnToValidator(List.of()),
+                new CapturingStateStore(),
+                new MockEnvironment(),
+                Clock.systemUTC()
+        );
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.startAuthorization(
+                new OAuthAuthorizationCommand("neutral", ClientChannel.WEB, "/")
+        )).isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("exceptionStatus", ExceptionStatus.UNSUPPORTED_CLIENT_CHANNEL);
+        assertThat(provider.request).isNull();
+    }
+
     private OAuthProductClientCompatibilityResolver defaultClientResolver() {
         return new OAuthProductClientCompatibilityResolver(clientId -> switch (clientId) {
             case OAuthProductClientCompatibilityResolver.DEFAULT_CARELOG_WEB_CLIENT_ID ->
