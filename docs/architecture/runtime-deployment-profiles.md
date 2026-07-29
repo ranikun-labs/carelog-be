@@ -1,6 +1,6 @@
 # Carelog Runtime·Deployment Profiles and Portfolio Boundaries
 
-이 문서는 [ADR-001](decisions/ADR-001-carelog-runtime-deployment-profiles.md)의 설명용 Architecture다. 현재 Deployable State, Near-term Target, 장기 Logical Platform을 분리한다. 실제 Domain, Hostname, IP, Tunnel ID, Secret은 기록하지 않는다.
+이 문서는 [ADR-001](decisions/ADR-001-carelog-runtime-deployment-profiles.md)의 설명용 Architecture다. 현재 Deployable State, Near-term Target, 장기 Logical Platform을 분리한다. 통신·메시징·확장 기술의 선택은 [ADR-002](decisions/ADR-002-platform-communication-messaging-scaling.md)가 소유한다. 실제 Domain, Hostname, IP, Tunnel ID, Secret은 기록하지 않는다.
 
 ## Portfolio Source of Truth
 
@@ -10,7 +10,7 @@
 | Product | Dev Harness | Multi-AI 작업 제어·세션 연결·승인 실행 | Stabilization / Maintenance |
 | Product | Finance Harness | 금융 질문·Checklist·Journal·복기 | Foundation / Planned Build |
 | Shared Platform | Shared Identity | 공통 사용자 식별·OAuth·Token 경계 | Supporting Platform |
-| Shared Platform | Shared AI | 공통 Model 호출·정책·안전·비용 경계 | Architecture / Planned |
+| Shared Platform | Shared AI | 공통 Model 실행·기술적 안전·비용 경계 | Architecture / Planned |
 
 공용 플랫폼은 실제 Product 요구로 검증된 범위부터 확장한다. 논리 책임 분리, 독립 Deployment Unit, Physical Host 분리는 같은 결정이 아니다.
 
@@ -72,9 +72,9 @@ flowchart TB
 
 Mac mini 한 대에서 실행된다는 사실은 같은 Service라는 뜻이 아니다. 반대로 Java Package가 나뉘어도 독립 Build·Deploy·Rollback이 불가능하면 독립 MSA가 아니다.
 
-## Near-term Runtime — Auth Approved, Shared AI Planned
+## Near-term Runtime — Auth Contract-gated, Shared AI Planned
 
-Carelog Auth Service 물리 추출은 Near-term 승인 대상이다. Shared AI Runtime은 Near-term 계획 대상이며 현재 Runtime은 아니다. 초기에는 둘 다 같은 Mac mini에서 별도 Process 또는 Container로 실행할 수 있다.
+Carelog Auth Service 물리 추출은 API·데이터 소유권·보안 계약과 내부 의존성 분리가 완료된 뒤의 Near-term 대상이다. Shared AI Runtime은 Near-term 계획 대상이며 현재 Runtime은 아니다. 추출 조건을 충족하면 초기에는 둘 다 같은 Mac mini에서 별도 Process 또는 Container로 실행할 수 있다.
 
 ```mermaid
 flowchart LR
@@ -105,27 +105,27 @@ flowchart TB
     gateway --> carelog[Carelog Core]
     gateway --> dev[Dev Harness Backend]
     gateway --> finance[Finance Harness Backend]
-    carelog --> identity
-    dev --> identity
-    finance --> identity
+    carelog -. limited management call .-> identity
+    dev -. limited management call .-> identity
+    finance -. limited management call .-> identity
     carelog --> ai[Shared AI]
     dev --> ai
     finance --> ai
     ai --> provider[External Model Provider]
 ```
 
-Shared AI는 기본 Public Route로 노출하지 않는다. Shared Identity의 Login/OAuth Endpoint만 Gateway를 통해 공개될 수 있다. 각 Product Service는 다른 Product Service 또는 Shared Identity의 내부 Table을 직접 사용하지 않는다.
+Shared AI는 기본 Public Route로 노출하지 않는다. Shared Identity의 Login/OAuth·Refresh·계정 관리 Endpoint만 Gateway를 통해 공개될 수 있다. 일반 Product API는 Gateway가 JWT·Blacklist를 검증해 전달한 신뢰 인증 Context로 Product가 자체 인가하며, Product가 요청마다 Shared Identity를 호출하지 않는다. Product의 Identity 직접 호출은 계정 상세·Provider Linking·계정 정지/탈퇴·관리자 계정 처리·특수 Introspection 같은 제한된 관리 호출이다. 각 Product Service는 다른 Product Service 또는 Shared Identity의 내부 Table을 직접 사용하지 않는다.
 
 ### Logical Service Dependencies
 
 ```mermaid
 flowchart LR
-    carelog[Carelog Core] --> identity[Shared Identity contract]
-    dev[Dev Harness Backend] --> identity
-    finance[Finance Harness Backend] --> identity
-    carelog --> ai[Shared AI internal call]
-    dev --> ai
-    finance --> ai
+    carelog[Carelog Core] -. limited management call .-> identity[Shared Identity contract]
+    dev[Dev Harness Backend] -. limited management call .-> identity
+    finance[Finance Harness Backend] -. limited management call .-> identity
+    carelog -->|direct HTTP| ai[Shared AI internal call]
+    dev -->|direct HTTP| ai
+    finance -->|direct HTTP| ai
     ai --> provider[External Model Provider]
 ```
 
@@ -137,7 +137,7 @@ flowchart LR
 | Dev Harness Backend / Control Plane | Multi-AI 작업 제어·Project Context·Session Handoff·Routing·Approval Queue·Closed-loop Work Management | 현재 독립 Spring Boot Runtime으로 과장 금지 |
 | Finance Harness Backend | 금융 질문·Checklist·Journal·Review·금융 Product Policy·데이터 | 현재 완성 Backend로 과장 금지 |
 | Shared Identity | Account·Password Login·OAuth·State·PKCE·Token·ExternalIdentity·Logout·Revocation·중립 인증 계약 | Product Domain Table 직접 소유 금지 |
-| Shared AI | Provider Adapter·Prompt/Workflow·Context 최소화·RAG/Vector·Timeout/Retry·비용·Usage/Audit·공통 Safety | Product별 업무 판단 독점 금지 |
+| Shared AI | Provider Adapter·API Key/Secret·Model Alias·Timeout·제한 Retry·Rate Limit·Usage/Cost·공통 Observability·Provider 장애 처리·기술적 Safety | 제품별 System Prompt·Workflow·Domain Policy·Tool·결과 검증·저장/반영 소유 금지 |
 
 Carelog 의료·케어 판단은 Carelog가, Finance 투자자문 금지 정책은 Finance Harness가, Dev Harness 실행 승인 정책은 Dev Harness가 소유한다. Shared AI는 공통 AI 실행·안전·비용 경계만 소유한다.
 
@@ -183,12 +183,20 @@ Rate Limit Key는 장기 Backup 대상이 아니고 OAuth State는 단기 상태
 
 ## Service Extraction Sequence
 
-1. Current Carelog Auth Boundary 안정화: Provider-neutral OAuth Core, Gateway/Auth 계약, Kakao OAuth, Characterization Test, Token·ExternalIdentity 소유권.
-2. Carelog Auth Service 물리 추출: 독립 Build·Runtime·Configuration·Migration, Core API 계약, Gateway Route, Token Revocation 계약.
-3. Shared Identity 확장 기반: 제품 중립 API, 다제품 Tenant·Client 경계, Migration·Backward Compatibility. 실제 다제품 인증 소비가 Trigger.
-4. Shared AI Runtime 구축: 독립 Process, Provider Adapter, Policy·Usage·Cost, Safe Context Contract, Carelog 첫 소비자, Public Direct Route 금지.
-5. Finance Harness Backend: Domain 경계, Shared Identity·AI 소비, 독립 Data Ownership.
-6. Dev Harness Backend / Cloud Control Plane: Domain 경계, Shared Identity·AI 소비, Local Runtime과 Cloud Control Plane 계약.
+1. Current Carelog Auth/OAuth Boundary 안정화.
+2. Product Client Registry 확정.
+3. Redirect URI exact allowlist 확정.
+4. Token issuer/audience 계약 확정.
+5. Stable Error Code와 Current Session API 확정.
+6. Web/Mobile Session 계약 확정.
+7. Auth Schema/Migration 소유권 확정.
+8. 내부 Auth Module과 Carelog Core 의존성 분리.
+9. 독립 Carelog Auth Service 물리 추출: 독립 Build·Runtime·Configuration, Gateway Route, Token Revocation 계약과 Rollback을 검증.
+10. 실제 다제품 소비 후 Shared Identity 일반화: 제품 중립 API, 다제품 Tenant·Client 경계, Migration·Backward Compatibility를 확장.
+11. Shared AI Runtime 구축: 독립 Process, 공통 AI 실행 메커니즘, Safe Context Contract, Carelog 첫 소비자, Public Direct Route 금지.
+12. Finance Harness와 Dev Harness Backend는 각 Product 우선순위와 실제 요구에 따라 추가.
+
+API·데이터 소유권·보안 계약은 물리 Process 분리보다 먼저 고정한다. 계약이 안정화되지 않은 Auth Module을 별도 Process로 옮기는 것은 Service 추출 완료로 보지 않는다.
 
 Finance Harness와 Dev Harness의 실제 개발 우선순위는 Portfolio WIP 정책을 따른다. 동시에 모두 구현한다고 가정하지 않는다.
 
@@ -204,7 +212,7 @@ Finance Harness와 Dev Harness의 실제 개발 우선순위는 Portfolio WIP �
 | Data Boundary | Redis·PostgreSQL은 private bind만 허용 |
 | External Model Provider | Shared AI가 구현된 후 최소화·비식별화된 허용 데이터만 전달 |
 
-OAuth Authorization·Exchange는 현재 Auth/OAuth Module에서 수행하며, 향후 Auth Service / Shared Identity가 계약을 소유한다. Gateway는 외부 인증 Header를 제거한 뒤 검증된 Header만 주입한다. AI 요청은 Product Service가 권한을 확인한 후 내부 Shared AI를 호출하는 흐름이며, 민감정보 전송은 별도 정책 승인 전 금지한다.
+OAuth Authorization·Exchange는 현재 Auth/OAuth Module에서 수행하며, 향후 Auth Service / Shared Identity가 계약을 소유한다. Gateway는 외부 인증 Header를 제거한 뒤 검증된 Header만 주입한다. AI 요청은 Product Service가 권한을 확인한 후 Gateway를 경유하지 않고 내부 Direct HTTP로 Shared AI를 호출하는 흐름이며, 민감정보 전송은 별도 정책 승인 전 금지한다.
 
 ## Public Repository와 Private 운영 문서의 경계
 

@@ -21,6 +21,7 @@
 | [monorepo-strategy.md](monorepo-strategy.md) | Gradle Multi-Module 모노레포 전환 결정 배경 |
 | [scg-auth-design.md](scg-auth-design.md) | Spring Cloud Gateway 인증 설계 (JWT 검증, Blacklist, 라우팅, carelog-be 전환 전략) |
 | [architecture/decisions/ADR-001-carelog-runtime-deployment-profiles.md](architecture/decisions/ADR-001-carelog-runtime-deployment-profiles.md) | MVP Runtime·Deployment Profile 결정 |
+| [architecture/decisions/ADR-002-platform-communication-messaging-scaling.md](architecture/decisions/ADR-002-platform-communication-messaging-scaling.md) | Product·Shared Platform 통신·메시징·확장 기술 도입 기준 |
 | [architecture/runtime-deployment-profiles.md](architecture/runtime-deployment-profiles.md) | Mac mini·Hybrid·AWS Runtime Profile 비교 |
 | [operations/mac-mini-pilot-readiness.md](operations/mac-mini-pilot-readiness.md) | Mac mini 파일럿 운영 준비 체크리스트 |
 

@@ -7,6 +7,7 @@
 | 결정 범위 | Carelog MVP의 공개 진입점, Runtime·Data 배치, Portfolio Service Boundary와 추출 기준 |
 | Repository | `care-log/carelog-be` |
 | 관련 PR | #34 `feat/kakao-oauth-gateway-publication` (Draft, 구현 변경 없음) |
+| 관련 통신 결정 | [ADR-002](ADR-002-platform-communication-messaging-scaling.md) |
 | 승인 범위 | Development, Local Live E2E, Pilot, Low-SLA Initial Operation |
 | 재검토 조건 | Hybrid/AWS Trigger, 실제 SLA·RPO/RTO 합의, Cloudflare Header chain 검증, 검증된 다제품 소비 |
 
@@ -101,7 +102,7 @@ AWS 재검토 Trigger는 Mac 전원·ISP·디스크 장애 반복, 합의 RPO/RT
 
 ## Near-term Deployment Target
 
-Auth 분리는 Near-term 승인 대상이다. 초기에는 같은 Mac mini에서 별도 Process 또는 Container로 실행할 수 있으며, 별도 서버를 뜻하지 않는다.
+Auth 분리는 Near-term 승인 대상이지만 물리 Process 분리 승인을 뜻하지 않는다. Product Client, Redirect, issuer/audience, Error/Session API, Web/Mobile Session, Schema/Migration 소유권과 내부 의존성 분리를 먼저 완료해야 한다. 이후 같은 Mac mini에서 별도 Process 또는 Container로 실행할 수 있으며, 별도 서버를 뜻하지 않는다.
 
 ```text
 Mac mini M4
@@ -114,7 +115,7 @@ Mac mini M4
 └─ PostgreSQL 1개
 ```
 
-Carelog Auth Service는 독립 Build·Deploy·Rollback, Configuration·Secret, 인증 API 계약, Auth Data Migration 경계를 소유한다. Shared AI Runtime은 처음부터 제품 공통 사용을 고려한 독립 Deployment Unit으로 설계하지만, 현재 구현되지는 않았다. 초기 소비자는 Carelog이며 Public Route로 직접 노출하지 않는다.
+추출된 Carelog Auth Service는 독립 Build·Deploy·Rollback, Configuration·Secret, 인증 API 계약, Auth Data Migration 경계를 소유한다. Shared AI Runtime은 처음부터 제품 공통 사용을 고려한 독립 Deployment Unit으로 설계하지만, 현재 구현되지는 않았다. 초기 소비자는 Carelog이며 Public Route로 직접 노출하지 않는다.
 
 Dev Harness Backend와 Finance Harness Backend는 각 Product 개발 단계에서 추가한다. Near-term에 다섯 Runtime이 모두 구현된 것으로 보지 않는다.
 
@@ -123,11 +124,17 @@ Dev Harness Backend와 Finance Harness Backend는 각 Product 개발 단계에�
 장기 목표는 Product Service가 Shared Identity 계약과 Shared AI Runtime을 내부 호출로 소비하는 구조다.
 
 ```text
-Client → Spring Cloud Gateway → Product Service → Shared AI → External Model Provider
-                              └→ Shared Identity contract
+일반 Product API:
+Client → Spring Cloud Gateway JWT/Blacklist 검증 → 신뢰 인증 Context → Product 자체 인가
+
+Identity 소유 API:
+Client → Spring Cloud Gateway → Shared Identity
+
+AI 호출:
+Product Service → Direct HTTP → Shared AI → External Model Provider
 ```
 
-Shared Identity Login/OAuth Endpoint는 Gateway를 통해 공개될 수 있으나 Shared AI는 기본 Public Route로 노출하지 않는다. Product Service는 사용자·업무 권한과 제품 데이터 접근, AI 결과 반영 여부를 통제한다.
+Shared Identity Login/OAuth·Refresh·계정 관리 Endpoint는 Gateway를 통해 공개될 수 있으나 Shared AI는 기본 Public Route로 노출하지 않는다. Product Service는 일반 요청마다 Shared Identity를 호출하지 않고 Gateway의 신뢰 인증 Context로 자체 인가한다. Identity 직접 호출은 계정 상세·Provider Linking·계정 정지/탈퇴·관리자 처리·특수 Introspection 같은 제한된 관리 호출이다. Product Service는 사용자·업무 권한과 제품 데이터 접근, AI 결과 반영 여부를 통제한다.
 
 ### Carelog Core
 
@@ -149,9 +156,9 @@ Carelog Auth Service에서 Shared Identity로 일반화하는 것은 Finance Har
 
 ### Shared AI
 
-목표 책임은 GPT API를 포함한 Model Provider 호출, Prompt·Workflow, Context 최소화·비식별화, RAG·Vector 검색, Timeout·Retry, 동시성·비용 제한, 비동기 Job, Output Validation, AI Usage·Audit, 공통 Policy·Safety 경계다. 로컬 LLM 모델 서버를 뜻하지 않는다.
+목표 책임은 GPT API를 포함한 Provider Adapter, API Key·Secret, Model Alias, Timeout, 제한 Retry, Rate Limit, Usage·Cost, 공통 Observability, Provider 장애 처리와 기술적 Safety다. 로컬 LLM 모델 서버를 뜻하지 않는다.
 
-Carelog의 의료·케어 업무 판단, Finance Harness의 투자자문 금지 정책, Dev Harness의 실행 승인 정책은 각 Product Service가 소유한다. Shared AI는 제품 업무 판단을 독점하지 않는다.
+제품별 System Prompt·Workflow·Domain Context·Tool, Carelog 업무 정책, Finance Harness의 투자자문 금지 정책, Dev Harness의 실행 승인 정책, 결과 검증과 저장·반영은 각 Product Service가 소유한다. Shared AI는 제품 업무 판단이나 Product Policy를 독점하지 않는다.
 
 ## Redis Decision and Logical Ownership
 
@@ -185,12 +192,18 @@ Key prefix, ACL User, Command Permission, TTL, Persistence 책임으로 논리 �
 
 ## Service Extraction Roadmap and Triggers
 
-1. **Current Auth Boundary 안정화** — Provider-neutral OAuth Core, Gateway/Auth 계약, Kakao OAuth, Characterization Test, Token·ExternalIdentity 소유권을 내부 Module에서 강화한다.
-2. **Carelog Auth Service 물리 추출** — 독립 Build·Runtime·Configuration·Migration, Carelog Core API 계약, Gateway Route, Token Revocation 계약을 완성한다.
-3. **Shared Identity 확장 기반** — 제품 종속 Naming 제거, 중립 API, 다제품 Tenant·Client 경계, Migration·Backward Compatibility를 준비한다. 실제 다제품 인증 소비가 Trigger다.
-4. **Shared AI Runtime 구축** — 독립 Process, Provider Adapter, Policy·Usage·Cost, Safe Context Contract, Carelog 첫 소비자, Public Direct Route 금지를 구현한다.
-5. **Finance Harness Backend** — Finance Domain 경계, Shared Identity·Shared AI 소비, 독립 Data Ownership을 구축한다.
-6. **Dev Harness Backend / Cloud Control Plane** — Dev Harness Domain 경계, Shared Identity·Shared AI 소비, Local Runtime과 Cloud Control Plane 계약을 구축한다.
+1. **Current Auth/OAuth Boundary 안정화**
+2. **Product Client Registry**
+3. **Redirect URI exact allowlist**
+4. **issuer/audience 계약**
+5. **Stable Error Code와 Current Session API**
+6. **Web/Mobile Session 계약**
+7. **Auth Schema/Migration 소유권**
+8. **내부 Auth Module과 Carelog Core 의존성 분리**
+9. **독립 Carelog Auth Service 추출** — 독립 Build·Runtime·Configuration, Gateway Route, Token Revocation·Rollback을 검증한다.
+10. **실제 다제품 소비 후 Shared Identity 일반화** — 제품 중립 API, 다제품 Tenant·Client 경계, Migration·Backward Compatibility를 확장한다.
+
+API·데이터 소유권·보안 계약은 물리 Process 분리보다 먼저 고정한다. Finance Harness와 Dev Harness Backend, Shared AI Runtime의 실제 구축 순서는 Portfolio WIP와 검증된 Product 요구를 따른다.
 
 Finance Harness와 Dev Harness의 실제 순서는 Portfolio WIP 정책을 따르며 동시에 모두 구현한다고 가정하지 않는다.
 
@@ -206,7 +219,7 @@ Mac mini, 가정 전원, ISP, cloudflared, SCG, Application Runtime, Redis, Post
 
 ## Deferred Options and Consequences
 
-즉시 EC2/RDS, Gateway 전용 EC2, 온프레미스 Nginx, EC2↔Mac VPN, ALB/NLB, ElastiCache, Kubernetes, Multi-AZ, Service Mesh는 현재 MVP에는 비용·관리 지점·복잡도를 늘리므로 제외한다.
+즉시 EC2/RDS, Gateway 전용 EC2, 온프레미스 Nginx, EC2↔Mac VPN, ALB/NLB, ElastiCache, Kubernetes, Multi-AZ, Service Mesh는 현재 MVP에는 비용·관리 지점·복잡도를 늘리므로 제외한다. HTTP/SSE/NATS와 gRPC·Kafka·Kubernetes의 구체적 선택 및 도입 Trigger는 [ADR-002](ADR-002-platform-communication-messaging-scaling.md)가 소유한다.
 
 이 결정은 서버비와 관리 지점을 최소화하면서 현재 revocation 계약을 보존한다. 반면 단일 Host·ISP·전원 장애, Backup/Restore 책임, 높은 SLA 불가, 향후 pgvector와 Core Transaction의 자원 경쟁을 감수한다.
 
