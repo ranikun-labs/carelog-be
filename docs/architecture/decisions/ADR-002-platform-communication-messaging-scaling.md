@@ -88,8 +88,10 @@ Shared Identity로 보낸다.
 Client → Gateway → Shared Identity
 ```
 
-일반 Product API는 Gateway가 JWT 서명·issuer·audience와 Blacklist를 검증한 뒤 신뢰
-인증 Context를 Product에 전달하고, Product가 자체 업무 인가를 수행한다.
+현재 Gateway는 JWT 서명과 Blacklist를 검증하고 기존 Claims 기반 인증 Context를
+Product에 전달한다. issuer/audience 계약이 설계·구현된 이후의 Target Flow에서는
+Gateway가 JWT 서명·issuer·audience·Blacklist를 검증한 뒤 신뢰 인증 Context를
+전달한다. Product는 어느 흐름에서도 자체 업무 인가를 수행한다.
 
 ```text
 Client → Gateway JWT/Blacklist 검증
@@ -140,6 +142,12 @@ Shared AI는 제품별 Prompt, Workflow, Domain Policy를 독점하지 않는다
 Observability와 기술적 Safety가 Product의 업무 정책 또는 결과 책임을 대체하지
 않는다.
 
+Provider-neutral RAG Adapter, Embedding Runtime, Vector Infrastructure, 공통 AI Job
+Runtime과 공통 실행 Orchestration은 Shared AI의 제품 중립 기술 Capability 후보이며
+현재 구현된 Runtime이 아니다. Product는 Corpus, Retrieval Policy, Domain Context,
+Domain Validation과 결과 저장·업무 반영을 소유한다. 구체적 소유권과 도입 범위는 실제
+Use Case 발생 후 후속 Decision에서 확정한다.
+
 ### 동기 호출 불변조건
 
 - 사용자 요청 하나의 필수 동기 Downstream은 가급적 하나 이하로 유지한다.
@@ -178,9 +186,10 @@ NATS JetStream은 현재 Runtime이 아니다. 첫 명확한 비동기 Use Case�
 - 유실되면 안 되는 Event에만 Transactional Outbox를 적용한다.
 - 모든 Event에 Transactional Outbox를 강제하지 않는다.
 
-Event Envelope, Subject Naming, Retention, Dead Letter, Reconciliation, Publisher
-Failure 정책은 첫 Use Case와 함께 후속 결정한다. 이 ADR은 실제 NATS 설정,
-Docker Compose 또는 Production 코드를 추가하지 않는다.
+Event Envelope, Subject Naming, Retention, Dead Letter 처리, Reconciliation, Publisher
+Failure, 첫 Producer/Consumer, Backup·Restore 정책은 첫 Use Case와 함께 후속
+결정한다. 이 ADR은 실제 NATS 설정, Docker Compose 또는 Production 코드를 추가하지
+않는다.
 
 ### gRPC 도입 Trigger
 
@@ -236,8 +245,9 @@ Mac mini M4 한 대와 낮은 SLA의 초기 운영에서는 Kubernetes가 기본
 
 반면 첫 NATS Use Case가 생기면 Delivery, Idempotency, Outbox, Reconciliation을
 구체화하는 후속 ADR과 운영 준비가 필요하다. 내부 Service Authentication,
-Service Discovery, SSE 재연결·취소·Backpressure 계약도 실제 추출·Streaming 작업의
-후속 Decision으로 남는다.
+Service Discovery, SSE의 Shared AI → Product → Gateway → Client Target Flow와
+재연결·Last-Event-ID, 사용자 취소, Stream Timeout, Backpressure, 중간 장애, 결과
+저장과 Stream 종료 정합성은 실제 Streaming 작업의 후속 Decision으로 남는다.
 
 ## Non-goals
 
