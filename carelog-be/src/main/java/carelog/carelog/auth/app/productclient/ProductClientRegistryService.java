@@ -1,9 +1,9 @@
 package carelog.carelog.auth.app.productclient;
 
 import carelog.carelog.auth.app.port.productclient.ProductClientReader;
-import carelog.carelog.auth.app.port.productclient.ProductClientRegistry;
 import carelog.carelog.auth.app.port.productclient.RegisteredProductClient;
 import carelog.carelog.auth.domain.ProductClient;
+import carelog.carelog.auth.domain.ProductClientIdPolicy;
 import carelog.carelog.auth.domain.ProductClientRepository;
 import carelog.carelog.common.web.exception.CustomException;
 import carelog.carelog.common.web.exception.ExceptionStatus;
@@ -13,18 +13,13 @@ import org.springframework.stereotype.Service;
 /** DB Registry에서 활성 Client만 OAuth Core에 전달한다. */
 @Service
 @RequiredArgsConstructor
-public class ProductClientRegistryService implements ProductClientRegistry, ProductClientReader {
+public class ProductClientRegistryService implements ProductClientReader {
 
     private final ProductClientRepository productClientRepository;
 
     @Override
-    public RegisteredProductClient readEnabled(String clientId) {
-        return requireEnabled(clientId);
-    }
-
-    @Override
     public RegisteredProductClient requireEnabled(String clientId) {
-        if (clientId == null || clientId.isBlank()) {
+        if (!ProductClientIdPolicy.isValid(clientId)) {
             throw new CustomException(ExceptionStatus.INVALID_PRODUCT_CLIENT_ID);
         }
 

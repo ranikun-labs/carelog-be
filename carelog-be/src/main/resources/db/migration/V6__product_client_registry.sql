@@ -7,10 +7,13 @@ CREATE TABLE product_clients (
     created_at timestamp(6) with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at timestamp(6) with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uq_product_clients_client_id UNIQUE (client_id),
+    CONSTRAINT chk_product_clients_client_id_format CHECK (client_id ~ '^[a-z0-9][a-z0-9._-]{0,99}$'),
     CONSTRAINT chk_product_clients_product CHECK (product IN ('CARELOG', 'FINANCE_HARNESS', 'DEV_HARNESS')),
-    CONSTRAINT chk_product_clients_channel CHECK (channel IN ('WEB', 'IOS', 'ANDROID'))
+    CONSTRAINT chk_product_clients_channel CHECK (channel IN ('WEB', 'MOBILE', 'IOS', 'ANDROID'))
 );
 
 -- Flyway가 한 번만 적용하는 명시적 초기 등록이다. Application bootstrap insert는 사용하지 않는다.
 INSERT INTO product_clients (client_id, product, channel, enabled)
-VALUES ('carelog-web', 'CARELOG', 'WEB', TRUE);
+VALUES
+    ('carelog-web', 'CARELOG', 'WEB', TRUE),
+    ('carelog-mobile', 'CARELOG', 'MOBILE', TRUE);

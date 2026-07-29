@@ -1,7 +1,5 @@
 package carelog.carelog.auth.domain;
 
-import carelog.carelog.auth.app.port.productclient.Product;
-import carelog.carelog.auth.app.port.productclient.ProductClientChannel;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -57,10 +55,7 @@ public class ProductClient {
     private OffsetDateTime updatedAt;
 
     private ProductClient(String clientId, Product product, ProductClientChannel channel, boolean enabled) {
-        if (clientId == null || clientId.isBlank()) {
-            throw new IllegalArgumentException("clientId must not be blank");
-        }
-        this.clientId = clientId;
+        this.clientId = ProductClientIdPolicy.requireValid(clientId);
         this.product = Objects.requireNonNull(product, "product must not be null");
         this.channel = Objects.requireNonNull(channel, "channel must not be null");
         this.enabled = enabled;
