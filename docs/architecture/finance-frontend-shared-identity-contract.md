@@ -466,11 +466,12 @@ Frontend는 provider secret, verifier, challenge, raw redirect URI, 자체 OAuth
 | Phase | 선행 조건 | 완료 조건 | Repository / Owner | Risk | Rollback |
 | --- | --- | --- | --- | --- | --- |
 | 0 사실 고정 | clean revision | 이 문서와 matrix review | carelog-be docs / Identity+FE owners | 사실/목표 혼동 | Draft 폐기 |
-| 1 Consumer Contract | Phase 0 합의 | client registry, 확장 가능한 channel 모델과 WEB client, redirect/origin, audience, error/session ADR+contract tests | carelog-be Auth+Gateway / Identity owner | 기존 Carelog client 깨짐 | 기존 Kakao path/JSON refresh 유지 |
-| 2 Auth Service 추출 | schema/API ownership 확정 | 독립 배포에서 Carelog contract test 통과, Carelog Core가 Identity DB 직접 접근하지 않음 | Carelog Auth Service / Identity owner | data/token cutover | Gateway route를 기존 carelog-be로 복귀 |
-| 3 Finance Web 연결 | WEB client 등록. Cross-origin 배치 시 CORS/OPTIONS와 cookie/session 계약 완료 | same-origin login/callback/refresh/logout/session/guard E2E; cross-origin 선택 시 CORS/OPTIONS E2E 추가 | Finance FE + Shared Identity + Gateway / FE·Identity owners | cookie/CORS/redirect 장애 | Finance auth feature flag off |
-| 4 Capacitor 연결 | appId, native platforms, link association, secure storage | iOS/Android system-browser 실기기 E2E | Finance FE + Shared Identity / Mobile·Identity owners | callback/secure storage 차이 | Web-only 유지, native auth off |
-| 5 Shared Identity 일반화 | 두 제품 소비 사실 축적 | Carelog/Finance/Dev client별 audience/provider/session 격리 | Shared Identity + consumers / Platform owner | premature generalization | client별 adapter 유지 |
+| 1 Consumer·Security Contract | Phase 0 합의 | Product Client Registry, redirect URI exact allowlist, issuer/audience, stable error code와 Current Session API, Web/Mobile Session 계약 | carelog-be Auth+Gateway / Identity owner | 기존 Carelog client 깨짐 | 기존 Kakao path/JSON refresh 유지 |
+| 2 Ownership·Dependency 분리 | Phase 1 계약 확정 | Auth Schema/Migration 소유권 확정, 내부 Auth Module과 Carelog Core 의존성 분리, contract tests | carelog-be Auth / Identity owner | schema/API 결합 잔존 | 내부 Module 배치 유지 |
+| 3 Auth Service 추출 | Phase 2 완료 | 독립 배포에서 Carelog contract test 통과, Carelog Core가 Identity DB 직접 접근하지 않음 | Carelog Auth Service / Identity owner | data/token cutover | Gateway route를 기존 carelog-be로 복귀 |
+| 4 Finance Web 연결 | WEB client 등록. Cross-origin 배치 시 CORS/OPTIONS와 cookie/session 계약 완료 | same-origin login/callback/refresh/logout/session/guard E2E; cross-origin 선택 시 CORS/OPTIONS E2E 추가 | Finance FE + Shared Identity + Gateway / FE·Identity owners | cookie/CORS/redirect 장애 | Finance auth feature flag off |
+| 5 Capacitor 연결 | appId, native platforms, link association, secure storage | iOS/Android system-browser 실기기 E2E | Finance FE + Shared Identity / Mobile·Identity owners | callback/secure storage 차이 | Web-only 유지, native auth off |
+| 6 Shared Identity 일반화 | 두 제품 소비 사실 축적 | Carelog/Finance/Dev client별 audience/provider/session 격리 | Shared Identity + consumers / Platform owner | premature generalization | client별 adapter 유지 |
 
 ## 14. Core vs Repetitive Work
 
@@ -587,11 +588,14 @@ audience, stable error code, current session API는 Production 보안·운영을
 iOS/Android는 현재 native project와 callback/session 기반이 없고 backend도 `MOBILE` 하나로만
 모델링하므로 현재 계약으로 불가능하다.
 
-Auth Service 추출 전에 가장 먼저 사람이 직접 고정할 Core는 다음 네 가지다.
+Auth Service 물리 추출 전에 다음 계약과 소유권을 순서대로 고정한다.
 
 1. Product Client Registry
 2. Redirect URI exact allowlist
 3. Token issuer/audience
-4. Web cookie와 Mobile secure-storage를 분리한 session 계약
+4. Stable Error Code와 Current Session API
+5. Web cookie와 Mobile secure-storage를 분리한 session 계약
+6. Auth Schema/Migration 소유권
+7. 내부 Auth Module과 Carelog Core 의존성 분리
 
-이 네 가지 없이 물리 추출부터 하면 Carelog 결합을 새 서비스 안에 그대로 옮기게 된다.
+이 계약과 소유권 없이 물리 추출부터 하면 Carelog 결합을 새 서비스 안에 그대로 옮기게 된다.
