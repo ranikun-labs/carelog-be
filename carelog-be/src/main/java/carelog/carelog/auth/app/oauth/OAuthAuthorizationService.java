@@ -27,12 +27,15 @@ public class OAuthAuthorizationService {
 
     private final OAuthProviderRegistry providerRegistry;
     private final OAuthRedirectUriResolver redirectUriResolver;
+    private final OAuthProductClientCompatibilityResolver productClientCompatibilityResolver;
     private final ReturnToValidator returnToValidator;
     private final OAuthStateStore stateStore;
     private final Environment environment;
     private final Clock clock;
 
     public AuthorizationUrlResult startAuthorization(OAuthAuthorizationCommand command) {
+        // Provider Adapter를 선택하거나 외부 authorization URL을 만들기 전에 Client를 fail-closed로 검증한다.
+        productClientCompatibilityResolver.resolve(command);
         OAuthProviderPort provider = providerRegistry.resolve(command.provider());
         String providerCode = OAuthProviderRegistry.normalize(provider.providerCode());
         URI redirectUri = redirectUriResolver.resolve(providerCode, command.clientChannel());

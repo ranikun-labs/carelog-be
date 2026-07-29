@@ -12,6 +12,8 @@ public enum ExceptionStatus {
         INVALID_MANAGER_FIELDS(HttpStatus.BAD_REQUEST, "매니저는 아이디, 이메일, 비밀번호, 직군이 필수입니다."),
         UNSUPPORTED_OAUTH_PROVIDER(HttpStatus.BAD_REQUEST, "지원하지 않는 OAuth 제공자입니다."),
         UNSUPPORTED_CLIENT_CHANNEL(HttpStatus.BAD_REQUEST, "지원하지 않는 OAuth 클라이언트 채널입니다."),
+        INVALID_PRODUCT_CLIENT_ID(HttpStatus.BAD_REQUEST, "유효하지 않은 제품 인증 Client입니다."),
+        INVALID_PRODUCT_CLIENT_CHANNEL_MAPPING(HttpStatus.BAD_REQUEST, "제품 인증 Client와 채널 조합이 유효하지 않습니다."),
         INVALID_OAUTH_RETURN_TO(HttpStatus.BAD_REQUEST, "유효하지 않은 로그인 완료 후 이동 경로입니다."),
 
 
@@ -29,6 +31,9 @@ public enum ExceptionStatus {
         OAUTH_IDENTITY_CONFLICT(HttpStatus.CONFLICT, "OAuth 계정 연결 상태가 유효하지 않습니다."),
 
         // 403 FORBIDDEN
+        DISABLED_PRODUCT_CLIENT(HttpStatus.FORBIDDEN, "비활성화된 제품 인증 Client입니다."),
+
+        // 403 FORBIDDEN
         ACCESS_DENIED(HttpStatus.FORBIDDEN, "접근 권한이 없습니다."),
         JOURNAL_DELETE_NOT_ALLOWED(HttpStatus.FORBIDDEN, "일지는 삭제할 수 없습니다."),
 
@@ -38,6 +43,7 @@ public enum ExceptionStatus {
     REFRESH_TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "만료된 Refresh Token입니다."),
     REFRESH_TOKEN_NOT_FOUND(HttpStatus.NOT_FOUND, "Refresh Token을 찾을 수 없습니다."),
     INVALID_OAUTH_STATE(HttpStatus.UNAUTHORIZED, "유효하지 않거나 만료된 인증 요청입니다."),
+    UNKNOWN_PRODUCT_CLIENT(HttpStatus.UNAUTHORIZED, "알 수 없는 제품 인증 Client입니다."),
     OAUTH_PROVIDER_AUTH_FAILED(HttpStatus.UNAUTHORIZED, "OAuth 인증에 실패했습니다."),
     OAUTH_STATE_STORE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "OAuth 인증 요청 저장소를 사용할 수 없습니다.");
 

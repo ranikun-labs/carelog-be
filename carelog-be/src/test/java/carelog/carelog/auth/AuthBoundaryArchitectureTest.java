@@ -1,9 +1,18 @@
 package carelog.carelog.auth;
 
+import carelog.carelog.auth.domain.Product;
+import carelog.carelog.auth.domain.ProductClientChannel;
+import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
+import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
+import com.tngtech.archunit.lang.ConditionEvents;
+import com.tngtech.archunit.lang.SimpleConditionEvent;
 
+import java.util.Set;
+
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 /**
@@ -26,6 +35,12 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
  */
 @AnalyzeClasses(packages = "carelog.carelog")
 class AuthBoundaryArchitectureTest {
+
+    private static final String AUTH_DOMAIN_PACKAGE = "carelog.carelog.auth.domain";
+    private static final Set<String> ALLOWED_PORT_DOMAIN_TYPES = Set.of(
+            Product.class.getName(),
+            ProductClientChannel.class.getName()
+    );
 
     /**
      * 규칙 1 — AuthServiceImpl 은 승인된 내부 Port 뒤로 숨긴 것들에 직접 의존하면 안 된다.
@@ -50,7 +65,8 @@ class AuthBoundaryArchitectureTest {
      * 규칙 2 — Port 인터페이스는 구현 세부 타입을 경계 밖으로 노출하면 안 된다.
      *
      * <p>Port 의 입력·출력은 내부 계약 DTO / VO / primitive·identifier 여야 한다.
-     * 따라서 CRM Entity/Repository, Auth 영속화 타입, ORM/Spring Data 전용 타입에 의존하면 안 된다.
+     * 따라서 CRM Entity/Repository, Auth 영속 Entity/Repository, ORM/Spring Data 전용 타입에 의존하면 안 된다.
+     * ProductClient의 Domain Enum은 Port 계약의 값 타입으로 허용한다.
      */
     @ArchTest
     static final ArchRule port는_Entity_Repository_ORM_타입을_노출하지_않는다 =
@@ -58,12 +74,56 @@ class AuthBoundaryArchitectureTest {
                     .that().resideInAPackage("carelog.carelog.auth.app.port..")
                     .should().dependOnClassesThat().resideInAnyPackage(
                             "carelog.carelog.user..",            // CRM JPA Entity / Repository
-                            "carelog.carelog.auth.domain..",     // RefreshToken Entity / Repository
                             "jakarta.persistence..",             // ORM 전용 타입
                             "org.hibernate..",                   // ORM 전용 타입
                             "org.springframework.data.."         // Repository 추상 타입
                     )
-                    .because("Port 계약은 내부 DTO/VO/primitive만 노출해야 한다");
+                    .because("Port 계약은 CRM·영속 구현·ORM 타입을 노출하면 안 된다");
+
+    /**
+     * 규칙 2-1 — Product Client Port가 허용하는 Auth Domain 값 타입을 정확히 두 개로 고정한다.
+     *
+     * <p>Domain 패키지 전체를 허용하면 JPA Entity나 Repository가 Port 계약으로 새어 나오는 회귀를
+     * 잡을 수 없다. 따라서 {@link Product}, {@link ProductClientChannel}의 FQCN만 허용한다.
+     */
+    static final ArchCondition<JavaClass> 허용된_Auth_Domain_값_타입만_허용 =
+            new ArchCondition<>("허용된 Auth Domain 값 타입에만 의존") {
+                @Override
+                public void check(JavaClass source, ConditionEvents events) {
+                    source.getDirectDependenciesFromSelf().stream()
+                            .filter(dependency -> isAuthDomainType(dependency.getTargetClass()))
+                            .filter(dependency -> !isAllowedPortDomainType(dependency.getTargetClass()))
+                            .forEach(dependency -> events.add(SimpleConditionEvent.violated(
+                                    dependency,
+                                    dependency.getDescription() + "; Port는 "
+                                            + String.join(", ", ALLOWED_PORT_DOMAIN_TYPES)
+                                            + "만 Auth Domain 타입으로 의존할 수 있다"
+                            )));
+                }
+            };
+
+    @ArchTest
+    static final ArchRule port는_허용된_Auth_Domain_값_타입에만_의존한다 =
+            classes()
+                    .that().resideInAPackage("carelog.carelog.auth.app.port..")
+                    .should(허용된_Auth_Domain_값_타입만_허용)
+                    .because("Port는 Entity·Repository를 포함한 Auth Domain 구현 타입을 노출하면 안 된다");
+
+    static boolean isAllowedPortDomainType(JavaClass target) {
+        return ALLOWED_PORT_DOMAIN_TYPES.contains(target.getFullName());
+    }
+
+    private static boolean isAuthDomainType(JavaClass target) {
+        return target.getPackageName().equals(AUTH_DOMAIN_PACKAGE)
+                || target.getPackageName().startsWith(AUTH_DOMAIN_PACKAGE + ".");
+    }
+
+    @ArchTest
+    static final ArchRule domain은_application_계층에_의존하지_않는다 =
+            noClasses()
+                    .that().resideInAPackage("carelog.carelog.auth.domain..")
+                    .should().dependOnClassesThat().resideInAPackage("carelog.carelog.auth.app..")
+                    .because("Domain은 Application 계층에 의존하면 안 된다");
 
     /**
      * 규칙 3 — Auth Application(코어 + Port) 은 Adapter 구현체에 역으로 의존하면 안 된다.
