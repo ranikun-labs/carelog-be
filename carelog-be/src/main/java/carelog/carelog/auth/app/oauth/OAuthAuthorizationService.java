@@ -37,10 +37,9 @@ public class OAuthAuthorizationService {
     public AuthorizationUrlResult startAuthorization(OAuthAuthorizationCommand command) {
         // Provider Adapter를 선택하거나 외부 authorization URL을 만들기 전에 Client를 fail-closed로 검증한다.
         RegisteredProductClient client = productClientCompatibilityResolver.resolve(command);
-        String requestedProviderCode = OAuthProviderRegistry.normalize(command.provider());
-        URI redirectUri = redirectUriResolver.resolve(requestedProviderCode, client);
-        OAuthProviderPort provider = providerRegistry.resolve(requestedProviderCode);
+        OAuthProviderPort provider = providerRegistry.resolve(command.provider());
         String providerCode = OAuthProviderRegistry.normalize(provider.providerCode());
+        URI redirectUri = redirectUriResolver.resolve(providerCode, client);
         String returnTo = returnToValidator.validate(command.returnTo());
         String state = generateState();
         PkceChallenge pkce = provider.supportsPkce() ? PkceChallenge.generate() : null;

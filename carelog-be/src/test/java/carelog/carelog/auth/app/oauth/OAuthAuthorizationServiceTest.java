@@ -25,6 +25,11 @@ import java.time.ZoneOffset;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 class OAuthAuthorizationServiceTest {
 
@@ -225,6 +230,53 @@ class OAuthAuthorizationServiceTest {
         assertThat(provider.request).isNull();
     }
 
+    @Test
+    void callback_설정이_없는_unknown_provider는_Callback_Resolver_전에_Provider_오류로_거부한다() {
+        OAuthRedirectUriResolver redirectUriResolver = mock(OAuthRedirectUriResolver.class);
+        OAuthAuthorizationService service = new OAuthAuthorizationService(
+                new OAuthProviderRegistry(List.of(new CapturingProvider(false))),
+                redirectUriResolver,
+                defaultClientResolver(),
+                new ReturnToValidator(List.of()),
+                new CapturingStateStore(),
+                new MockEnvironment(),
+                Clock.systemUTC()
+        );
+
+        assertThatThrownBy(() -> service.startAuthorization(
+                new OAuthAuthorizationCommand("missing", ClientChannel.WEB, "/")
+        )).isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("exceptionStatus", ExceptionStatus.UNSUPPORTED_OAUTH_PROVIDER);
+        verifyNoInteractions(redirectUriResolver);
+    }
+
+    @Test
+    void Registry의_canonical_providerCode로_callback을_조회하고_State에_저장한다() {
+        CapturingStateStore store = new CapturingStateStore();
+        CapturingProvider provider = new CapturingProvider(" CANONICAL-PROVIDER ", false);
+        OAuthProviderRegistry providerRegistry = mock(OAuthProviderRegistry.class);
+        when(providerRegistry.resolve("alias")).thenReturn(provider);
+        OAuthProviderCallbackProperties properties = new OAuthProviderCallbackProperties();
+        properties.setProviderCallbacks(java.util.Map.of(
+                "canonical-provider", java.util.Map.of("carelog-web", "https://canonical.example/callback")
+        ));
+        OAuthAuthorizationService service = new OAuthAuthorizationService(
+                providerRegistry,
+                new OAuthRedirectUriResolver(properties, new MockEnvironment()),
+                defaultClientResolver(),
+                new ReturnToValidator(List.of()),
+                store,
+                new MockEnvironment(),
+                Clock.systemUTC()
+        );
+
+        service.startAuthorization(new OAuthAuthorizationCommand("alias", ClientChannel.WEB, "/"));
+
+        verify(providerRegistry).resolve("alias");
+        assertThat(provider.request.redirectUri()).isEqualTo(URI.create("https://canonical.example/callback"));
+        assertThat(store.record.provider()).isEqualTo("canonical-provider");
+    }
+
     private OAuthProductClientCompatibilityResolver defaultClientResolver() {
         return new OAuthProductClientCompatibilityResolver(clientId -> switch (clientId) {
             case OAuthProductClientCompatibilityResolver.DEFAULT_CARELOG_WEB_CLIENT_ID ->
@@ -250,19 +302,27 @@ class OAuthAuthorizationServiceTest {
     }
 
     private static class CapturingProvider implements OAuthProviderPort {
+        private final String providerCode;
         private final boolean requiresNonce;
         private final boolean supportsPkce;
         private OAuthAuthorizationRequest request;
 
         private CapturingProvider(boolean requiresNonce) {
-            this(requiresNonce, true);
+            this("neutral", requiresNonce, true);
         }
         private CapturingProvider(boolean requiresNonce, boolean supportsPkce) {
+            this("neutral", requiresNonce, supportsPkce);
+        }
+        private CapturingProvider(String providerCode, boolean requiresNonce) {
+            this(providerCode, requiresNonce, true);
+        }
+        private CapturingProvider(String providerCode, boolean requiresNonce, boolean supportsPkce) {
+            this.providerCode = providerCode;
             this.requiresNonce = requiresNonce;
             this.supportsPkce = supportsPkce;
         }
 
-        @Override public String providerCode() { return "neutral"; }
+        @Override public String providerCode() { return providerCode; }
         @Override public boolean requiresNonce() { return requiresNonce; }
         @Override public boolean supportsPkce() { return supportsPkce; }
         @Override public URI buildAuthorizationUrl(OAuthAuthorizationRequest request) {

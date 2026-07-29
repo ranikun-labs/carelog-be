@@ -64,6 +64,30 @@ class OAuthRedirectUriResolverTest {
     }
 
     @Test
+    void 새_provider_client_설정은_legacy_설정보다_우선한다() {
+        OAuthRedirectUriResolver resolver = new OAuthRedirectUriResolver(
+                properties(Map.of("neutral", Map.of("carelog-web", "https://new.example/callback"))),
+                new MockEnvironment().withProperty(
+                        "oauth.redirect-uris.neutral.WEB", "https://legacy.example/callback")
+        );
+
+        assertThat(resolver.resolve("neutral", client("carelog-web", ProductClientChannel.WEB)))
+                .isEqualTo(URI.create("https://new.example/callback"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {" ", "https://[invalid"})
+    void 새_설정이_blank_또는_invalid이면_legacy로_fallback하지_않는다(String callbackUri) {
+        OAuthRedirectUriResolver resolver = new OAuthRedirectUriResolver(
+                properties(Map.of("neutral", Map.of("carelog-web", callbackUri))),
+                new MockEnvironment().withProperty(
+                        "oauth.redirect-uris.neutral.WEB", "https://legacy.example/callback")
+        );
+
+        assertUnsupported(() -> resolver.resolve("neutral", client("carelog-web", ProductClientChannel.WEB)));
+    }
+
+    @Test
     void client_mapping이_없으면_fail_closed로_거부한다() {
         OAuthRedirectUriResolver resolver = new OAuthRedirectUriResolver(new OAuthProviderCallbackProperties(), new MockEnvironment());
 
