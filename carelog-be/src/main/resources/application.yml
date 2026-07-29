@@ -36,6 +36,8 @@ jwt:
 oauth:
   state:
     ttl: 5m
+  # provider + clientId callback URI. 기존 redirect-uris.<provider>.<channel>은 carelog-web/mobile에만 fallback으로 유지한다.
+  provider-callbacks: {}
   redirect-uris: {}
   allowed-return-origins: []
 

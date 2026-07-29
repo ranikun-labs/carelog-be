@@ -6,6 +6,7 @@ import carelog.carelog.auth.app.port.oauth.OAuthProviderPort;
 import carelog.carelog.auth.app.port.oauth.OAuthStateRecord;
 import carelog.carelog.auth.app.port.oauth.OAuthStateStore;
 import carelog.carelog.auth.app.port.oauth.PkceChallenge;
+import carelog.carelog.auth.app.port.productclient.RegisteredProductClient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.convert.DurationStyle;
 import org.springframework.core.env.Environment;
@@ -35,10 +36,11 @@ public class OAuthAuthorizationService {
 
     public AuthorizationUrlResult startAuthorization(OAuthAuthorizationCommand command) {
         // Provider Adapter를 선택하거나 외부 authorization URL을 만들기 전에 Client를 fail-closed로 검증한다.
-        productClientCompatibilityResolver.resolve(command);
-        OAuthProviderPort provider = providerRegistry.resolve(command.provider());
+        RegisteredProductClient client = productClientCompatibilityResolver.resolve(command);
+        String requestedProviderCode = OAuthProviderRegistry.normalize(command.provider());
+        URI redirectUri = redirectUriResolver.resolve(requestedProviderCode, client);
+        OAuthProviderPort provider = providerRegistry.resolve(requestedProviderCode);
         String providerCode = OAuthProviderRegistry.normalize(provider.providerCode());
-        URI redirectUri = redirectUriResolver.resolve(providerCode, command.clientChannel());
         String returnTo = returnToValidator.validate(command.returnTo());
         String state = generateState();
         PkceChallenge pkce = provider.supportsPkce() ? PkceChallenge.generate() : null;
