@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * V1~V4 Flyway Migration이 (1) 신규 빈 DB, (2) 기존(ddl-auto:update로 만들어진) Legacy Schema
+ * V1~V6 Flyway Migration이 (1) 신규 빈 DB, (2) 기존(ddl-auto:update로 만들어진) Legacy Schema
  * 양쪽에서 안전한지 raw JDBC로 직접 검증한다. Spring 컨텍스트 없이 Flyway Java API + Testcontainers만
  * 사용해 Migration 자체의 정합성에만 집중한다(JUnit Jupiter Testcontainers 확장 모듈 없이 수동 lifecycle 관리).
  */
@@ -49,7 +49,7 @@ class IdentityFoundationMigrationTest {
         var result = flyway.migrate();
 
         assertThat(result.success).isTrue();
-        assertThat(result.migrationsExecuted).isEqualTo(5);
+        assertThat(result.migrationsExecuted).isEqualTo(6);
 
         try (Connection conn = DriverManager.getConnection(jdbcUrl, POSTGRES.getUsername(), POSTGRES.getPassword())) {
             assertTableExists(conn, "users");
@@ -60,6 +60,7 @@ class IdentityFoundationMigrationTest {
             assertTableExists(conn, "platform_accounts");
             assertTableExists(conn, "password_credentials");
             assertTableExists(conn, "external_identities");
+            assertTableExists(conn, "product_clients");
             assertColumnExists(conn, "users", "account_id");
             assertColumnExists(conn, "refresh_token", "account_id");
         }
@@ -95,8 +96,8 @@ class IdentityFoundationMigrationTest {
         var result = flyway.migrate();
 
         assertThat(result.success).isTrue();
-        // baseline이 V1을 흡수하므로 실행되는 건 V2/V3/V4/V5 4개뿐이어야 한다.
-        assertThat(result.migrationsExecuted).isEqualTo(4);
+        // baseline이 V1을 흡수하므로 실행되는 건 V2~V6 5개뿐이어야 한다.
+        assertThat(result.migrationsExecuted).isEqualTo(5);
 
         try (Connection conn = DriverManager.getConnection(jdbcUrl, POSTGRES.getUsername(), POSTGRES.getPassword())) {
             // MANAGER Account 수 == Credential 수 == 1, CUSTOMER Account 수 == 0
@@ -137,6 +138,55 @@ class IdentityFoundationMigrationTest {
             assertThat(countRows(conn,
                     "SELECT COUNT(*) FROM users u WHERE u.account_id IS NOT NULL AND u.account_id NOT IN (SELECT id FROM platform_accounts)"))
                     .isEqualTo(0);
+        }
+    }
+
+    @DisplayName("V6은 CARELOG WEB 기본 Client를 한 번 등록하고 clientId·enum 제약을 강제한다")
+    @Test
+    void productClientRegistryMigration_seedsCarelogWebAndEnforcesConstraints() throws Exception {
+        String jdbcUrl = createDatabase("product_client_registry_db");
+        Flyway.configure().dataSource(jdbcUrl, POSTGRES.getUsername(), POSTGRES.getPassword()).load().migrate();
+
+        OffsetDateTime now = OffsetDateTime.now();
+        try (Connection conn = DriverManager.getConnection(jdbcUrl, POSTGRES.getUsername(), POSTGRES.getPassword())) {
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT product, channel, enabled FROM product_clients WHERE client_id = ?")) {
+                ps.setString(1, "carelog-web");
+                try (ResultSet rs = ps.executeQuery()) {
+                    assertThat(rs.next()).isTrue();
+                    assertThat(rs.getString("product")).isEqualTo("CARELOG");
+                    assertThat(rs.getString("channel")).isEqualTo("WEB");
+                    assertThat(rs.getBoolean("enabled")).isTrue();
+                }
+            }
+
+            assertThatThrownBy(() -> {
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "INSERT INTO product_clients (client_id, product, channel, enabled, created_at, updated_at) " +
+                                "VALUES (?, ?, ?, ?, ?, ?)")) {
+                    ps.setString(1, "carelog-web");
+                    ps.setString(2, "CARELOG");
+                    ps.setString(3, "WEB");
+                    ps.setBoolean(4, true);
+                    ps.setObject(5, now);
+                    ps.setObject(6, now);
+                    ps.executeUpdate();
+                }
+            }).isInstanceOf(Exception.class);
+
+            assertThatThrownBy(() -> {
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "INSERT INTO product_clients (client_id, product, channel, enabled, created_at, updated_at) " +
+                                "VALUES (?, ?, ?, ?, ?, ?)")) {
+                    ps.setString(1, "invalid-channel");
+                    ps.setString(2, "CARELOG");
+                    ps.setString(3, "MOBILE");
+                    ps.setBoolean(4, true);
+                    ps.setObject(5, now);
+                    ps.setObject(6, now);
+                    ps.executeUpdate();
+                }
+            }).isInstanceOf(Exception.class);
         }
     }
 
