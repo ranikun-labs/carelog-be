@@ -165,7 +165,11 @@ PR #34는 조사 당시 OPEN/Draft이며 수정하거나 checkout하지 않았�
   - `/api/v1/auth/oauth/kakao/exchange`
 - 두 전용 route는 `order: -20`, 일반 `/api/**` Carelog route는 `order: 0`이다.
 - authorization/exchange는 서로 다른 Redis rate-limit bucket을 쓴다.
-- rate limiter 장애는 OAuth 요청에 503으로 fail closed한다.
+- `OAuthFailClosedRateLimiter`와 OAuth 요청을 503으로 변환하려는 Filter가 존재하며,
+  mocked `RedisRateLimiter`가 `Mono.error`를 반환하는 단위 테스트도 있다. 그러나 Spring
+  Cloud Gateway `RedisRateLimiter`의 내부 fail-open 가능성으로 오류가 custom wrapper까지
+  전달되지 않을 수 있고, Real Redis 장애 Integration Test도 없다. OAuth rate-limit Redis
+  장애의 실제 Runtime 동작은 현재 **Unverified**다.
 - key는 `X-Forwarded-For`와 `trusted-proxy-hops`를 반영한 client IP다. 운영 proxy
   topology와 hop 수가 불일치하면 식별 계약도 틀어진다.
 - 인입 `X-User-Id`, `X-Organization-Id`, `X-Role`, `X-Public-Id`,
@@ -237,7 +241,7 @@ Provider client 설정은 `carelog.auth.oauth.kakao` namespace에 결합돼 있�
 | Cookie | 사용하지 않음 |
 | Access/Refresh TTL | millisecond 환경 설정값. tracked production config에 숫자 고정값 없음 |
 | OAuth state TTL | tracked config 5분 |
-| Refresh session | Carelog PostgreSQL `refresh_token` table, account당 1 session 교체 |
+| Refresh session | Carelog PostgreSQL `refresh_token` table. 애플리케이션 교체 흐름은 account당 하나를 의도하지만 DB unique constraint는 없음 |
 | Refresh token 저장 | raw token 평문 |
 | Refresh rotation | refresh 성공 시 DB row token/expiry 교체 |
 | Logout | access token 남은 TTL만큼 Redis blacklist 등록 후 account refresh session 삭제 |
@@ -256,6 +260,10 @@ storage에 보존해야 재시작 후 refresh할 수 있다. 이는 기술적으
 Production Web 권장 계약은 아니다. Capacitor도 native secure storage와 bridge가
 없다면 같은 문제가 생긴다.
 
+애플리케이션은 `deleteByAccountId → save` 흐름으로 기존 refresh session을 교체하고,
+rotation도 수행한다. 다만 `refresh_token.account_id`에는 unique constraint가 없으므로
+동시 로그인 경쟁까지 강제하는 데이터베이스 불변식은 아니다.
+
 ## 8. Web·Capacitor 차이
 
 ### 8.1 Web SPA
@@ -267,12 +275,17 @@ Production Web 권장 계약은 아니다. Capacitor도 native secure storage와
 | Access memory + HttpOnly refresh cookie | 불가능 | 현재 cookie 발급/refresh/CSRF 계약 없음 | **Target Web 권장** |
 | Cookie session 전체 | 불가능 | stateful session 계약 없음 | 별도 필요가 검증될 때만 |
 
-Local Web은 같은 origin 또는 Vite proxy, provider/redirect 설정, 이미 연결된
-ExternalIdentity가 준비되면 얇은 Adapter로 시연 가능하다. direct cross-origin은
-Gateway preflight 때문에 현재 막힌다.
+Local Web은 same-origin 개발 환경 또는 Vite proxy, OAuth runtime 설정, 이미 연결된
+ExternalIdentity가 준비되면 **Compatible with Frontend Adapter**다.
 
-Production Web은 Product Client, redirect/origin allowlist, audience, stable error,
-current session, HttpOnly refresh cookie와 CSRF/CORS 결정을 고정한 후 연결해야 한다.
+Same-origin Production Web은 Browser CORS preflight가 발생하지 않으므로 현재 JSON token
+계약으로 **Compatible with Frontend Adapter**다. HttpOnly refresh cookie, token audience,
+stable error code, current session API는 Production 보안·운영을 위한 권장 확장이다.
+
+Cross-origin Production Web은 **Blocked — Gateway CORS/OPTIONS Extension Required**다.
+OAuth 전용 Gateway route와 public matcher가 POST exact path만 허용하므로 OPTIONS는 일반
+`/api/**` route로 들어간다. Browser preflight에는 Authorization header가 없어 Gateway가
+401을 반환할 수 있으며 Backend의 OPTIONS 허용까지 도달하지 못한다.
 
 ### 8.2 Capacitor
 
@@ -304,13 +317,13 @@ system browser + claimed HTTPS callback을 우선한다. `Channel`은 `IOS`와 `
 | Exchange | 없음 | Kakao 전용 POST | Compatible with Frontend Adapter | typed adapter |
 | Access Token | 저장 없음 | JSON body | Compatible with Frontend Adapter | memory store |
 | Refresh Token | 저장 없음 | JSON body | Requires Auth Contract Extension | Web cookie, Mobile secure storage |
-| Session 저장 | 없음 | account당 DB session 1개 | Requires Auth Contract Extension | product/channel/device 정책 |
+| Session 저장 | 없음 | account당 하나를 의도하는 application replace 흐름; DB unique constraint 없음 | Requires Auth Contract Extension | product/channel/device 정책 |
 | Refresh | 없음 | body token, rotation | Compatible with Frontend Adapter | Production Web cookie variant |
 | Logout | 없음 | Bearer + blacklist + session delete | Compatible with Frontend Adapter | cookie clear/idempotency 계약 |
 | Current User | 없음 | endpoint 없음 | Requires Auth Contract Extension | `/session` 최소 projection |
 | Route Guard | 없음 | backend 무관 | Compatible with Frontend Adapter | FE session bootstrap/guard |
 | Error Code | 없음 | message만 노출 | Requires Auth Contract Extension | stable `code`, retryability |
-| CORS | 없음 | backend broad pattern; Gateway PR에 없음 | Blocked | Gateway preflight/exact CORS |
+| CORS (cross-origin) | 없음 | backend broad pattern; Gateway PR에 없음 | Blocked | Gateway preflight/exact CORS |
 | Cookie | 없음 | token cookie 없음 | Requires Auth Contract Extension | Secure/HttpOnly/SameSite/CSRF |
 | Web SPA | SPA만 존재 | JSON token + `WEB` | Compatible with Frontend Adapter | local/same-origin 한정 |
 | Capacitor iOS | platform 없음 | 공통 `MOBILE` | Blocked | appId, link, IOS channel, storage |
@@ -324,8 +337,9 @@ system browser + claimed HTTPS callback을 우선한다. `Channel`은 `IOS`와 `
 
 | Surface | 판정 | 조건/차단점 |
 | --- | --- | --- |
-| Local Web | **얇은 Frontend Adapter로 가능** | same-origin/dev proxy, OAuth runtime config, 연결 계정 필요 |
-| Production Web | **Auth 계약 확장 후 가능** | CORS/preflight, client registry, redirect/origin, audience, Web session |
+| Local Web | **Compatible with Frontend Adapter** | same-origin 개발 환경 또는 dev proxy, OAuth runtime config, 연결된 ExternalIdentity 필요 |
+| Same-origin Production Web | **Compatible with Frontend Adapter** | CORS preflight 없음. JSON token 계약으로 기술적 연결 가능; 보안·운영 확장은 권장 |
+| Cross-origin Production Web | **Blocked — Gateway CORS/OPTIONS Extension Required** | OPTIONS가 OAuth public matcher에 일치하지 않고 Gateway 401 가능 |
 | Capacitor iOS | **현재 계약으로 불가능** | native platform/callback 없음, channel/secure session 미분리 |
 | Capacitor Android | **현재 계약으로 불가능** | native platform/callback 없음, channel/secure session 미분리 |
 
@@ -364,11 +378,15 @@ client registration, token audience, session surface와 schema ownership을 먼�
 | --- | --- | --- |
 | Product Client ID | **Phase 1 필수** | redirect/origin/audience/provider 정책의 stable key |
 | Product | Phase 1에는 client metadata로 충분 | 별도 복잡한 aggregate는 과설계 |
-| Channel `WEB/IOS/ANDROID` | **Phase 1 필수** | callback와 session 보호 방식이 다름 |
+| Channel | **Phase 1: 확장 가능한 모델 + WEB client 계약** | IOS/ANDROID 추가 가능성을 보존하되 실제 native client 등록은 Mobile Phase로 미룸 |
 | Redirect URI Allowlist | **Phase 1 필수** | runtime raw redirect 입력 금지 유지 |
-| Allowed Origin | **Web 연결 전 필수** | CORS/CSRF와 redirect는 다른 allowlist |
+| Allowed Origin | **Cross-origin Web 연결 전 필수** | CORS/CSRF와 redirect는 다른 allowlist |
 | Token Audience | **추출 전 필수** | Carelog/Finance resource token 오용 방지 |
 | Provider Enablement | Phase 1 최소 boolean/set | client별 허용 provider만 필요, 복잡한 policy engine 불필요 |
+
+Phase 1은 WEB client의 실제 계약을 고정한다. IOS/ANDROID client registration, Universal
+Link/App Link, Custom Scheme, Native Secure Storage, device session은 Phase 4 Capacitor
+연결에서 구현·검증한다.
 
 ### 11.2 목표 Frontend Port
 
@@ -448,9 +466,9 @@ Frontend는 provider secret, verifier, challenge, raw redirect URI, 자체 OAuth
 | Phase | 선행 조건 | 완료 조건 | Repository / Owner | Risk | Rollback |
 | --- | --- | --- | --- | --- | --- |
 | 0 사실 고정 | clean revision | 이 문서와 matrix review | carelog-be docs / Identity+FE owners | 사실/목표 혼동 | Draft 폐기 |
-| 1 Consumer Contract | Phase 0 합의 | client registry, channel, redirect/origin, audience, error/session ADR+contract tests | carelog-be Auth+Gateway / Identity owner | 기존 Carelog client 깨짐 | 기존 Kakao path/JSON refresh 유지 |
+| 1 Consumer Contract | Phase 0 합의 | client registry, 확장 가능한 channel 모델과 WEB client, redirect/origin, audience, error/session ADR+contract tests | carelog-be Auth+Gateway / Identity owner | 기존 Carelog client 깨짐 | 기존 Kakao path/JSON refresh 유지 |
 | 2 Auth Service 추출 | schema/API ownership 확정 | 독립 배포에서 Carelog contract test 통과, Carelog Core가 Identity DB 직접 접근하지 않음 | Carelog Auth Service / Identity owner | data/token cutover | Gateway route를 기존 carelog-be로 복귀 |
-| 3 Finance Web 연결 | Web client 등록, CORS/cookie/session 완료 | login/callback/refresh/logout/session/guard E2E | Finance FE + Shared Identity + Gateway / FE·Identity owners | cookie/CORS/redirect 장애 | Finance auth feature flag off |
+| 3 Finance Web 연결 | WEB client 등록. Cross-origin 배치 시 CORS/OPTIONS와 cookie/session 계약 완료 | same-origin login/callback/refresh/logout/session/guard E2E; cross-origin 선택 시 CORS/OPTIONS E2E 추가 | Finance FE + Shared Identity + Gateway / FE·Identity owners | cookie/CORS/redirect 장애 | Finance auth feature flag off |
 | 4 Capacitor 연결 | appId, native platforms, link association, secure storage | iOS/Android system-browser 실기기 E2E | Finance FE + Shared Identity / Mobile·Identity owners | callback/secure storage 차이 | Web-only 유지, native auth off |
 | 5 Shared Identity 일반화 | 두 제품 소비 사실 축적 | Carelog/Finance/Dev client별 audience/provider/session 격리 | Shared Identity + consumers / Platform owner | premature generalization | client별 adapter 유지 |
 
@@ -562,11 +580,12 @@ Core 불변식과 정책을 사람이 먼저 결정하고, Codex는 그 결정�
 
 ## 18. 결론
 
-Finance FE는 현재 Auth를 **부분적으로** 소비할 수 있다. Local Web의 통제된
-same-origin/dev-proxy 환경은 얇은 Adapter로 가능하지만, Production Web은 Shared
-consumer로서 필요한 client/redirect/audience/error/Web session/CORS 계약 확장 후에만
-가능하다. iOS/Android는 현재 native project와 callback/session 기반이 없고 backend도
-`MOBILE` 하나로만 모델링하므로 현재 계약으로 불가능하다.
+Finance FE는 현재 Auth를 **부분적으로** 소비할 수 있다. Local Web과 Same-origin
+Production Web은 조건을 충족하면 **Compatible with Frontend Adapter**다. Cross-origin
+Production Web은 Gateway CORS/OPTIONS 확장 전까지 blocked다. HttpOnly refresh cookie,
+audience, stable error code, current session API는 Production 보안·운영을 위한 권장 확장이다.
+iOS/Android는 현재 native project와 callback/session 기반이 없고 backend도 `MOBILE` 하나로만
+모델링하므로 현재 계약으로 불가능하다.
 
 Auth Service 추출 전에 가장 먼저 사람이 직접 고정할 Core는 다음 네 가지다.
 
