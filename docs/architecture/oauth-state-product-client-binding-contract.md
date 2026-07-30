@@ -152,13 +152,20 @@ Authorization DTO와 `code`/`state`만 받는 Exchange DTO도 유지한다.
 | query | 허용 |
 | fragment | 거부 |
 | blank | 거부 |
+| whitespace | raw `returnTo`의 어느 위치에 있든 모든 whitespace character를 거부한다. Path와 Query 내부의 ASCII space, horizontal tab, CR, LF 및 기타 whitespace를 모두 State 생성 전에 거부한다. |
 | 최대 길이 | 2,048자 |
-| 문자 집합 | printable ASCII만 허용 |
+| 문자 집합 | Non-ASCII character는 거부한다. ASCII 범위라도 whitespace와 control character는 모두 거부한다. |
 | 저장 | 정규화·decode·재조립하지 않고 검증된 원문을 그대로 State에 저장 |
 
-query 내부의 값은 navigation 데이터일 뿐 권한·Client 식별 근거가 아니다. 검증기에서
-decode 후 재인코딩하거나 경로를 canonicalize하면 검증 문자열과 사용 문자열이 달라질
-수 있으므로 금지한다.
+URI parsing 전에 raw 입력에서 모든 whitespace, control character, backslash,
+percent character, Non-ASCII character를 거부한다. 이 순서는 Java API나 특정 정규식
+구현을 Canonical 계약으로 고정하지 않으며, 위 보안 불변조건만 고정한다.
+
+Query 자체는 허용하지만 raw Query 내부의 whitespace는 허용하지 않는다. query 내부의
+값은 navigation 데이터일 뿐 권한·Client 식별 근거가 아니다. `%20`은 whitespace
+decode 정책이 아니라 기존 `%` 전면 거부 규칙으로 차단한다. 검증기에서 decode 후
+재인코딩하거나 경로를 canonicalize하면 검증 문자열과 사용 문자열이 달라질 수 있으므로
+금지한다.
 
 ## 7. 오류와 상태 전이
 
@@ -296,8 +303,8 @@ Registry port를 소유하더라도 호출 순서의 최종 책임은 `OAuthLogi
 | Client binding | clientId/product/channel 각각의 mismatch를 독립 거부 |
 | Registry status | unknown/disabled Client를 동일 외부 오류로 거부하고 Provider 미호출 |
 | Provider call ordering | 모든 State/Client 검증이 끝난 뒤에만 token exchange 호출 |
-| 정상 `returnTo` | `/`, 다중 segment, 허용 query, 최대 2,048자 printable ASCII 원문 보존 |
-| 거부 `returnTo` | blank, 비-`/` 시작, `//`, scheme/authority/host, backslash, `%`, `.`/`..` segment, fragment, control/non-ASCII, 2,048자 초과 |
+| 정상 `returnTo` | `/`, 다중 segment, whitespace가 없는 query, 최대 2,048자의 허용 ASCII 원문 보존 |
+| 거부 `returnTo` | blank, 비-`/` 시작, `//`, scheme/authority/host, backslash, `%`(따라서 `%20` 포함), `.`/`..` segment, fragment, `/patient list`, `/?q=a b`, path 내부 horizontal tab, query 내부 horizontal tab, CR 또는 LF 포함 입력, Unicode whitespace, 기타 control/non-ASCII, 2,048자 초과 |
 | 구버전 State | version/client snapshot이 없는 JSON을 fail-closed 401로 거부하고 Provider 미호출 |
 | Redis 장애 | save/consume 장애가 503이며 인증 실패로 위장되지 않음 |
 | Registry DB 장애 | 기존 5xx 경계 유지, 세부 Registry 상태 외부 비노출 |
