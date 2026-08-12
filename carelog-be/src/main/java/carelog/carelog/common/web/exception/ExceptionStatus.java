@@ -15,10 +15,12 @@ public enum ExceptionStatus {
         INVALID_PRODUCT_CLIENT_ID(HttpStatus.BAD_REQUEST, "유효하지 않은 제품 인증 Client입니다."),
         INVALID_PRODUCT_CLIENT_CHANNEL_MAPPING(HttpStatus.BAD_REQUEST, "제품 인증 Client와 채널 조합이 유효하지 않습니다."),
         INVALID_OAUTH_RETURN_TO(HttpStatus.BAD_REQUEST, "유효하지 않은 로그인 완료 후 이동 경로입니다."),
+        INVALID_CUSTOMER_DISPLAY_NAME(HttpStatus.BAD_REQUEST, "고객 표시 이름은 필수이며 공백만 입력할 수 없습니다."),
 
 
         // 404 NOT_FOUND
         USER_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."),
+        CUSTOMER_NOT_FOUND(HttpStatus.NOT_FOUND, "고객을 찾을 수 없습니다."),
         RELATION_NOT_FOUND(HttpStatus.NOT_FOUND, "관계를 찾을 수 없습니다."),
         JOURNAL_NOT_FOUND(HttpStatus.NOT_FOUND, "일지를 찾을 수 없습니다."),
         JOURNAL_TEMPLATE_NOT_FOUND(HttpStatus.NOT_FOUND, "일지 양식을 찾을 수 없습니다."),

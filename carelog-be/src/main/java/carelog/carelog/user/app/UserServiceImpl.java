@@ -99,6 +99,12 @@ public class UserServiceImpl implements UserService {
     public UserResponse updateUser(UUID publicId, UserUpdateRequest request) {
         User user = findUserEntityByPublicId(publicId);
 
+        // Customer는 Product Customer API의 제한된 필드만 변경할 수 있다.
+        // Legacy User mutation을 통해 비밀번호·PII를 우회 변경하지 못하게 경계를 닫는다.
+        if (user.getRole() == UserRole.CUSTOMER) {
+            throw new CustomException(ExceptionStatus.ACCESS_DENIED);
+        }
+
         if (request.password() != null && !request.password().isBlank()) {
             if (user.getAccountId() != null) {
                 // Identity Principal(MANAGER): Credential 정본을 먼저 갱신하고, 같은 해시를
@@ -127,6 +133,12 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public void deleteUser(UUID publicId) {
         User user = findUserEntityByPublicId(publicId);
+
+        // Product Customer API에는 delete capability가 없으며, generic User delete도 CUSTOMER를 거부한다.
+        if (user.getRole() == UserRole.CUSTOMER) {
+            throw new CustomException(ExceptionStatus.ACCESS_DENIED);
+        }
+
         userRepository.delete(user);
     }
 

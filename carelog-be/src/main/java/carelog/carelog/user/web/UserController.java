@@ -1,19 +1,15 @@
 package carelog.carelog.user.web;
 
-import carelog.carelog.auth.app.UserPrincipal;
 import carelog.carelog.common.web.dto.response.ApiResponse;
 import carelog.carelog.user.app.UserService;
-import carelog.carelog.user.web.dto.CustomerCreateRequest;
 import carelog.carelog.user.web.dto.ManagerCreateRequest;
 import carelog.carelog.user.web.dto.UserResponse;
 import carelog.carelog.user.web.dto.UserUpdateRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -27,23 +23,6 @@ public class UserController {
     public ResponseEntity<ApiResponse<UserResponse>> createManager(@Valid @RequestBody ManagerCreateRequest request) {
         UserResponse response = userService.createManager(request);
         return ApiResponse.created(response);
-    }
-
-    @PostMapping("/customers")
-    public ResponseEntity<ApiResponse<UserResponse>> createCustomer(
-            @Valid @RequestBody CustomerCreateRequest request,
-            @AuthenticationPrincipal UserPrincipal userDetails
-    ) {
-        UserResponse response = userService.createCustomer(request, userDetails);
-        return ApiResponse.created(response);
-    }
-
-    @GetMapping("/customers")
-    public ResponseEntity<ApiResponse<List<UserResponse>>> findAllCustomers (
-            @RequestParam(required = false) String name
-    ) {
-        List<UserResponse> responses = userService.findAllCustomers(name);
-        return ApiResponse.ok(responses);
     }
 
     @GetMapping("/user-id/{userId}")
@@ -72,4 +51,3 @@ public class UserController {
     }
 
 }
-
