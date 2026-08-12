@@ -28,4 +28,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> findAllByRole(UserRole role);
 
     List<User> findAllByRoleAndNameContaining(UserRole role, String name);
+
+    // Product Customer API는 Hibernate Tenant Filter와 별개로 모든 조회 조건에 조직 범위를 포함한다.
+    List<User> findAllByOrganizationIdAndRole(UUID organizationId, UserRole role);
+
+    List<User> findAllByOrganizationIdAndRoleAndNameContaining(
+            UUID organizationId, UserRole role, String name);
+
+    Optional<User> findByOrganizationIdAndRoleAndPublicId(
+            UUID organizationId, UserRole role, UUID publicId);
 }

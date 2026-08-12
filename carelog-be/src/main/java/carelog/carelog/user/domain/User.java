@@ -56,6 +56,9 @@ public class User extends TenantBaseEntity {
     @Column(name = "address_encrypted")
     private String addressEncrypted;
 
+    @Column(name = "customer_memo", columnDefinition = "text")
+    private String customerMemo;
+
     @Column(name = "deleted_at")
     private OffsetDateTime deletedAt;
 
@@ -66,7 +69,8 @@ public class User extends TenantBaseEntity {
     @Builder
     public User(
             String userId, String email, String password, String name,
-            UserRole role,  ManagerType managerType, String phoneEncrypted, String addressEncrypted
+            UserRole role, ManagerType managerType, String phoneEncrypted, String addressEncrypted,
+            String customerMemo
     ) {
         /**
          * Manager 불변식 검증 - 객체 생성 시, 바로 실패
@@ -87,6 +91,7 @@ public class User extends TenantBaseEntity {
         this.managerType = managerType;
         this.phoneEncrypted = phoneEncrypted;
         this.addressEncrypted = addressEncrypted;
+        this.customerMemo = customerMemo;
     }
 
     public void updatePhoneEncrypted(String phoneEncrypted) {
@@ -99,6 +104,14 @@ public class User extends TenantBaseEntity {
 
     public void updateAddressEncrypted(String addressEncrypted) {
         this.addressEncrypted = addressEncrypted;
+    }
+
+    public void updateName(String name) {
+        this.name = name;
+    }
+
+    public void updateCustomerMemo(String customerMemo) {
+        this.customerMemo = customerMemo;
     }
 
     public void assignAccountId(UUID accountId) {

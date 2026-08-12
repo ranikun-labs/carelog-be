@@ -2,8 +2,11 @@ package carelog.carelog.common.web.exception;
 
 import carelog.carelog.auth.app.port.oauth.OAuthStateStoreUnavailableException;
 import carelog.carelog.common.web.dto.response.ApiResponse;
+import org.springframework.validation.FieldError;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.authorization.AuthorizationDeniedException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -33,6 +36,22 @@ public class GlobalExceptionHandler {
         ExceptionStatus status = ExceptionStatus.OAUTH_STATE_STORE_UNAVAILABLE;
         ApiResponse<Object> response = ApiResponse.of(status.getHttpStatus(), status.getMessage());
         return new ResponseEntity<>(response, status.getHttpStatus());
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiResponse<Object>> handleValidationException(MethodArgumentNotValidException e) {
+        String message = e.getBindingResult().getFieldErrors().stream()
+                .findFirst()
+                .map(FieldError::getDefaultMessage)
+                .orElse("요청 값이 유효하지 않습니다.");
+        ApiResponse<Object> response = ApiResponse.of(HttpStatus.BAD_REQUEST, message);
+        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(AuthorizationDeniedException.class)
+    public ResponseEntity<ApiResponse<Object>> handleAuthorizationDenied(AuthorizationDeniedException e) {
+        ApiResponse<Object> response = ApiResponse.of(HttpStatus.FORBIDDEN, ExceptionStatus.ACCESS_DENIED.getMessage());
+        return new ResponseEntity<>(response, HttpStatus.FORBIDDEN);
     }
 
     /**

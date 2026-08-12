@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * V1~V6 Flyway Migration이 (1) 신규 빈 DB, (2) 기존(ddl-auto:update로 만들어진) Legacy Schema
+ * V1~V7 Flyway Migration이 (1) 신규 빈 DB, (2) 기존(ddl-auto:update로 만들어진) Legacy Schema
  * 양쪽에서 안전한지 raw JDBC로 직접 검증한다. Spring 컨텍스트 없이 Flyway Java API + Testcontainers만
  * 사용해 Migration 자체의 정합성에만 집중한다(JUnit Jupiter Testcontainers 확장 모듈 없이 수동 lifecycle 관리).
  */
@@ -50,7 +50,7 @@ class IdentityFoundationMigrationTest {
         var result = flyway.migrate();
 
         assertThat(result.success).isTrue();
-        assertThat(result.migrationsExecuted).isEqualTo(6);
+        assertThat(result.migrationsExecuted).isEqualTo(7);
 
         try (Connection conn = DriverManager.getConnection(jdbcUrl, POSTGRES.getUsername(), POSTGRES.getPassword())) {
             assertTableExists(conn, "users");
@@ -63,6 +63,8 @@ class IdentityFoundationMigrationTest {
             assertTableExists(conn, "external_identities");
             assertTableExists(conn, "product_clients");
             assertColumnExists(conn, "users", "account_id");
+            assertColumnExists(conn, "users", "customer_memo");
+            assertColumnIsNullable(conn, "users", "customer_memo");
             assertColumnExists(conn, "refresh_token", "account_id");
         }
     }
@@ -97,8 +99,8 @@ class IdentityFoundationMigrationTest {
         var result = flyway.migrate();
 
         assertThat(result.success).isTrue();
-        // baseline이 V1을 흡수하므로 실행되는 건 V2~V6 5개뿐이어야 한다.
-        assertThat(result.migrationsExecuted).isEqualTo(5);
+        // baseline이 V1을 흡수하므로 실행되는 건 V2~V7 6개뿐이어야 한다.
+        assertThat(result.migrationsExecuted).isEqualTo(6);
 
         try (Connection conn = DriverManager.getConnection(jdbcUrl, POSTGRES.getUsername(), POSTGRES.getPassword())) {
             // MANAGER Account 수 == Credential 수 == 1, CUSTOMER Account 수 == 0
@@ -131,6 +133,18 @@ class IdentityFoundationMigrationTest {
             // users.account_id는 MANAGER에만 연결, CUSTOMER는 null
             assertThat(getUuidColumn(conn, managerPublicId, "account_id")).isEqualTo(managerPublicId);
             assertThat(getUuidColumn(conn, customerPublicId, "account_id")).isNull();
+
+            // V7은 기존 Customer의 식별자·이름을 보존하고 메모리는 backfill하지 않는다.
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT public_id, name, customer_memo FROM users WHERE public_id = ?")) {
+                ps.setObject(1, customerPublicId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    assertThat(rs.next()).isTrue();
+                    assertThat(rs.getObject("public_id", UUID.class)).isEqualTo(customerPublicId);
+                    assertThat(rs.getString("name")).isEqualTo("Legacy Test " + customerPublicId);
+                    assertThat(rs.getString("customer_memo")).isNull();
+                }
+            }
 
             // orphan account/credential 없음: platform_accounts 수 == password_credentials 수 == users.account_id 연결 수
             assertThat(countRows(conn,
@@ -439,6 +453,18 @@ class IdentityFoundationMigrationTest {
             ps.setString(2, column);
             try (ResultSet rs = ps.executeQuery()) {
                 assertThat(rs.next()).as("column %s.%s should exist", table, column).isTrue();
+            }
+        }
+    }
+
+    private void assertColumnIsNullable(Connection conn, String table, String column) throws Exception {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT is_nullable FROM information_schema.columns WHERE table_name = ? AND column_name = ?")) {
+            ps.setString(1, table);
+            ps.setString(2, column);
+            try (ResultSet rs = ps.executeQuery()) {
+                assertThat(rs.next()).isTrue();
+                assertThat(rs.getString("is_nullable")).isEqualTo("YES");
             }
         }
     }

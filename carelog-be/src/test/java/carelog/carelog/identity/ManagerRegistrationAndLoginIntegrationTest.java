@@ -7,6 +7,7 @@ import carelog.carelog.auth.app.JwtTokenProvider;
 import carelog.carelog.auth.web.dto.request.LoginRequest;
 import carelog.carelog.auth.web.dto.response.LoginResponse;
 import carelog.carelog.common.web.exception.CustomException;
+import carelog.carelog.common.web.exception.ExceptionStatus;
 import carelog.carelog.identity.domain.PasswordCredential;
 import carelog.carelog.identity.domain.PasswordCredentialRepository;
 import carelog.carelog.identity.domain.PlatformAccountRepository;
@@ -171,7 +172,7 @@ class ManagerRegistrationAndLoginIntegrationTest {
             assertThat(credential.getPasswordHash()).startsWith("$2");
         }
 
-        @DisplayName("Customer 비밀번호 변경 요청은 Credential을 생성하지 않고 accountId는 계속 null이다")
+        @DisplayName("Customer 비밀번호 변경 요청은 Legacy User mutation으로 우회할 수 없다")
         @Test
         void changePassword_customerNeverCreatesCredential() {
             String managerId = "it-pwchange-mgr-" + UUID.randomUUID().toString().substring(0, 8);
@@ -192,10 +193,14 @@ class ManagerRegistrationAndLoginIntegrationTest {
 
             long credentialCountBefore = passwordCredentialRepository.count();
 
-            userService.updateUser(customer.publicId(), new UserUpdateRequest("someNewPassword1", null, null));
+            assertThatThrownBy(() -> userService.updateUser(
+                    customer.publicId(), new UserUpdateRequest("someNewPassword1", null, null)))
+                    .isInstanceOf(CustomException.class)
+                    .hasFieldOrPropertyWithValue("exceptionStatus", ExceptionStatus.ACCESS_DENIED);
 
             User updatedCustomer = userRepository.findByPublicId(customer.publicId()).orElseThrow();
             assertThat(updatedCustomer.getAccountId()).isNull();
+            assertThat(updatedCustomer.getPassword()).isNull();
             assertThat(passwordCredentialRepository.count()).isEqualTo(credentialCountBefore);
         }
     }

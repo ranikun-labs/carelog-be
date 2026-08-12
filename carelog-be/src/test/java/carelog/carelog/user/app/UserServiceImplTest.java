@@ -198,21 +198,34 @@ class UserServiceImplTest {
         assertThat(manager.getPassword()).isEqualTo("new-encoded-hash");
     }
 
-    @DisplayName("accountId가 없는 User(CUSTOMER)의 비밀번호 변경 요청은 Credential Port를 호출하지 않고 " +
-            "기존 계약대로 Legacy 컬럼만 passwordEncoder로 직접 갱신한다")
+    @DisplayName("CUSTOMER의 Legacy User 비밀번호 변경 요청은 Product Customer 경계 밖 mutation으로 차단한다")
     @Test
-    void updateUser_customerWithoutAccount_neverTouchesIdentityCredential() {
+    void updateUser_customerWithoutAccount_isBlockedBeforeCredentialMutation() {
         User customer = newCustomerWithoutAccount();
         when(userRepository.findByPublicId(customer.getPublicId())).thenReturn(java.util.Optional.of(customer));
-        when(passwordEncoder.encode("newPassword123")).thenReturn("legacy-only-hash");
 
         UserUpdateRequest request = new UserUpdateRequest("newPassword123", null, null);
-        userService.updateUser(customer.getPublicId(), request);
+        assertThatThrownBy(() -> userService.updateUser(customer.getPublicId(), request))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("exceptionStatus", ExceptionStatus.ACCESS_DENIED);
 
         verifyNoInteractions(passwordCredentialUpdatePort);
-        verify(passwordEncoder).encode("newPassword123");
-        assertThat(customer.getPassword()).isEqualTo("legacy-only-hash");
+        verifyNoInteractions(passwordEncoder);
+        assertThat(customer.getPassword()).isNull();
         assertThat(customer.getAccountId()).isNull();
+    }
+
+    @DisplayName("CUSTOMER의 Legacy User 삭제 요청은 soft-delete 전에 차단한다")
+    @Test
+    void deleteUser_customer_isBlockedBeforeMutation() {
+        User customer = newCustomerWithoutAccount();
+        when(userRepository.findByPublicId(customer.getPublicId())).thenReturn(java.util.Optional.of(customer));
+
+        assertThatThrownBy(() -> userService.deleteUser(customer.getPublicId()))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("exceptionStatus", ExceptionStatus.ACCESS_DENIED);
+
+        verify(userRepository, never()).delete(any(User.class));
     }
 
     @DisplayName("Identity Credential 갱신이 실패하면 예외가 그대로 전파되고 users.password는 변경되지 않는다")
