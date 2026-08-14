@@ -173,7 +173,9 @@ class CustomerEventProductApiIntegrationTest {
         mockMvc.perform(withManager(post("/customer-events"), organizationId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("null"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").isNotEmpty());
 
         String createBody = mockMvc.perform(withManager(post("/customer-events"), organizationId)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -191,12 +193,16 @@ class CustomerEventProductApiIntegrationTest {
         mockMvc.perform(withManager(patch("/customer-events/" + eventId), organizationId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("null"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").isNotEmpty());
 
         mockMvc.perform(withManager(post("/customer-events/" + eventId + "/occur"), organizationId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("null"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").isNotEmpty());
     }
 
     @Test
