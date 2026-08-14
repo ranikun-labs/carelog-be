@@ -161,6 +161,42 @@ class CustomerEventProductApiIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
+    @Test
+    @Transactional
+    @DisplayName("CustomerEvent 요청 본문이 JSON null이면 500 대신 잘못된 요청으로 거부한다")
+    void requestBodies_null_returnBadRequest() throws Exception {
+        UUID organizationId = UUID.randomUUID();
+        User customer = saveCustomer(organizationId, "본문 검증 고객");
+
+        mockMvc.perform(withManager(post("/customer-events"), organizationId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("null"))
+                .andExpect(status().isBadRequest());
+
+        String createBody = mockMvc.perform(withManager(post("/customer-events"), organizationId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "customerId": "%s",
+                                  "status": "PLANNED",
+                                  "scheduledAt": "2026-08-20T10:00:00+09:00"
+                                }
+                                """.formatted(customer.getPublicId())))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String eventId = com.jayway.jsonpath.JsonPath.read(createBody, "$.data.id");
+
+        mockMvc.perform(withManager(patch("/customer-events/" + eventId), organizationId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("null"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(withManager(post("/customer-events/" + eventId + "/occur"), organizationId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("null"))
+                .andExpect(status().isBadRequest());
+    }
+
     private User saveCustomer(UUID organizationId, String name) {
         User customer = User.builder().name(name).role(UserRole.CUSTOMER).build();
         customer.assignOrganization(organizationId);

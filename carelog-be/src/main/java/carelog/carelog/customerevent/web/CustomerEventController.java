@@ -35,7 +35,7 @@ public class CustomerEventController {
 
     @PostMapping
     public ResponseEntity<ApiResponse<CustomerEventResponse>> create(
-            @RequestBody CustomerEventCreateRequest request,
+            @RequestBody(required = false) CustomerEventCreateRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ApiResponse.created(customerEventService.create(principal.getOrganizationId(), request));
     }
@@ -63,7 +63,7 @@ public class CustomerEventController {
     @PatchMapping("/{eventId}")
     public ResponseEntity<ApiResponse<CustomerEventResponse>> update(
             @PathVariable UUID eventId,
-            @RequestBody CustomerEventUpdateRequest request,
+            @RequestBody(required = false) CustomerEventUpdateRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ApiResponse.ok(customerEventService.update(
                 principal.getOrganizationId(), eventId, request));
@@ -72,9 +72,10 @@ public class CustomerEventController {
     @PostMapping("/{eventId}/occur")
     public ResponseEntity<ApiResponse<CustomerEventResponse>> occur(
             @PathVariable UUID eventId,
-            @RequestBody CustomerEventOccurRequest request,
+            @RequestBody(required = false) CustomerEventOccurRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
-        OffsetDateTime occurredAt = CustomerEventServiceImpl.parseRequiredTime(request.occurredAt());
+        OffsetDateTime occurredAt = CustomerEventServiceImpl.parseRequiredTime(
+                request == null ? null : request.occurredAt());
         return ApiResponse.ok(customerEventService.occur(
                 principal.getOrganizationId(), eventId, occurredAt));
     }
