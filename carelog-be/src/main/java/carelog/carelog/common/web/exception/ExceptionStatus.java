@@ -16,11 +16,13 @@ public enum ExceptionStatus {
         INVALID_PRODUCT_CLIENT_CHANNEL_MAPPING(HttpStatus.BAD_REQUEST, "제품 인증 Client와 채널 조합이 유효하지 않습니다."),
         INVALID_OAUTH_RETURN_TO(HttpStatus.BAD_REQUEST, "유효하지 않은 로그인 완료 후 이동 경로입니다."),
         INVALID_CUSTOMER_DISPLAY_NAME(HttpStatus.BAD_REQUEST, "고객 표시 이름은 필수이며 공백만 입력할 수 없습니다."),
+        INVALID_CUSTOMER_EVENT(HttpStatus.BAD_REQUEST, "고객 이벤트 요청이 유효하지 않습니다."),
 
 
         // 404 NOT_FOUND
         USER_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."),
         CUSTOMER_NOT_FOUND(HttpStatus.NOT_FOUND, "고객을 찾을 수 없습니다."),
+        CUSTOMER_EVENT_NOT_FOUND(HttpStatus.NOT_FOUND, "고객 이벤트를 찾을 수 없습니다."),
         RELATION_NOT_FOUND(HttpStatus.NOT_FOUND, "관계를 찾을 수 없습니다."),
         JOURNAL_NOT_FOUND(HttpStatus.NOT_FOUND, "일지를 찾을 수 없습니다."),
         JOURNAL_TEMPLATE_NOT_FOUND(HttpStatus.NOT_FOUND, "일지 양식을 찾을 수 없습니다."),
@@ -31,6 +33,7 @@ public enum ExceptionStatus {
         RELATION_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 존재하는 관계입니다."),
         OAUTH_ACCOUNT_NOT_LINKED(HttpStatus.CONFLICT, "연결된 Carelog 계정이 없습니다."),
         OAUTH_IDENTITY_CONFLICT(HttpStatus.CONFLICT, "OAuth 계정 연결 상태가 유효하지 않습니다."),
+        INVALID_CUSTOMER_EVENT_TRANSITION(HttpStatus.CONFLICT, "허용되지 않는 고객 이벤트 상태 전이입니다."),
 
         // 403 FORBIDDEN
         DISABLED_PRODUCT_CLIENT(HttpStatus.FORBIDDEN, "비활성화된 제품 인증 Client입니다."),

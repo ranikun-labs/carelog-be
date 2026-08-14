@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * V1~V7 Flyway Migration이 (1) 신규 빈 DB, (2) 기존(ddl-auto:update로 만들어진) Legacy Schema
+ * 전체 Flyway Migration이 (1) 신규 빈 DB, (2) 기존(ddl-auto:update로 만들어진) Legacy Schema
  * 양쪽에서 안전한지 raw JDBC로 직접 검증한다. Spring 컨텍스트 없이 Flyway Java API + Testcontainers만
  * 사용해 Migration 자체의 정합성에만 집중한다(JUnit Jupiter Testcontainers 확장 모듈 없이 수동 lifecycle 관리).
  */
@@ -50,7 +50,7 @@ class IdentityFoundationMigrationTest {
         var result = flyway.migrate();
 
         assertThat(result.success).isTrue();
-        assertThat(result.migrationsExecuted).isEqualTo(7);
+        assertThat(result.migrationsExecuted).isEqualTo(8);
 
         try (Connection conn = DriverManager.getConnection(jdbcUrl, POSTGRES.getUsername(), POSTGRES.getPassword())) {
             assertTableExists(conn, "users");
@@ -62,6 +62,7 @@ class IdentityFoundationMigrationTest {
             assertTableExists(conn, "password_credentials");
             assertTableExists(conn, "external_identities");
             assertTableExists(conn, "product_clients");
+            assertTableExists(conn, "customer_events");
             assertColumnExists(conn, "users", "account_id");
             assertColumnExists(conn, "users", "customer_memo");
             assertColumnIsNullable(conn, "users", "customer_memo");
@@ -99,8 +100,8 @@ class IdentityFoundationMigrationTest {
         var result = flyway.migrate();
 
         assertThat(result.success).isTrue();
-        // baseline이 V1을 흡수하므로 실행되는 건 V2~V7 6개뿐이어야 한다.
-        assertThat(result.migrationsExecuted).isEqualTo(6);
+        // baseline이 V1을 흡수하므로 실행되는 건 V2~V8 7개뿐이어야 한다.
+        assertThat(result.migrationsExecuted).isEqualTo(7);
 
         try (Connection conn = DriverManager.getConnection(jdbcUrl, POSTGRES.getUsername(), POSTGRES.getPassword())) {
             // MANAGER Account 수 == Credential 수 == 1, CUSTOMER Account 수 == 0
