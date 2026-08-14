@@ -5,11 +5,13 @@ import carelog.carelog.common.web.dto.response.ApiResponse;
 import org.springframework.validation.FieldError;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @Slf4j
 @RestControllerAdvice
@@ -45,6 +47,13 @@ public class GlobalExceptionHandler {
                 .map(FieldError::getDefaultMessage)
                 .orElse("요청 값이 유효하지 않습니다.");
         ApiResponse<Object> response = ApiResponse.of(HttpStatus.BAD_REQUEST, message);
+        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler({MethodArgumentTypeMismatchException.class, HttpMessageNotReadableException.class})
+    public ResponseEntity<ApiResponse<Object>> handleMalformedRequest(Exception e) {
+        ApiResponse<Object> response = ApiResponse.of(
+                HttpStatus.BAD_REQUEST, "요청 값이 유효하지 않습니다.");
         return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
     }
 

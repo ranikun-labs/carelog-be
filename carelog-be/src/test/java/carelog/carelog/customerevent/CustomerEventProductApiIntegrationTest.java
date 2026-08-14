@@ -20,6 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.UUID;
 
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -195,6 +197,128 @@ class CustomerEventProductApiIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("null"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("Spring binding과 JSON parsing 실패는 safe 400 envelope로 응답한다")
+    void malformedInput_returnsSafeBadRequestEnvelope() throws Exception {
+        UUID organizationId = UUID.randomUUID();
+
+        mockMvc.perform(withManager(get("/customer-events/not-a-uuid"), organizationId))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").isNotEmpty());
+
+        mockMvc.perform(withManager(get("/customer-events")
+                        .param("customerId", "not-a-uuid"), organizationId))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").isNotEmpty());
+
+        mockMvc.perform(withManager(get("/customer-events")
+                        .param("customerId", UUID.randomUUID().toString())
+                        .param("limit", "not-a-number"), organizationId))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").isNotEmpty());
+
+        mockMvc.perform(withManager(post("/customer-events"), organizationId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").isNotEmpty());
+    }
+
+    @Test
+    @Transactional
+    @DisplayName("immediate OCCURRED와 CANCELLED 성공 surface를 직접 제공한다")
+    void lifecycleCreationAndCancellation_succeed() throws Exception {
+        UUID organizationId = UUID.randomUUID();
+        User customer = saveCustomer(organizationId, "생명주기 고객");
+
+        mockMvc.perform(withManager(post("/customer-events"), organizationId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "customerId": "%s",
+                                  "status": "OCCURRED",
+                                  "occurredAt": "2026-08-20T09:30:00+09:00"
+                                }
+                                """.formatted(customer.getPublicId())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.status").value("OCCURRED"))
+                .andExpect(jsonPath("$.data.scheduledAt").doesNotExist())
+                .andExpect(jsonPath("$.data.occurredAt").value("2026-08-20T09:30:00+09:00"));
+
+        String plannedBody = mockMvc.perform(withManager(post("/customer-events"), organizationId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "customerId": "%s",
+                                  "status": "PLANNED",
+                                  "scheduledAt": "2026-08-20T10:00:00+09:00"
+                                }
+                                """.formatted(customer.getPublicId())))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String plannedEventId = com.jayway.jsonpath.JsonPath.read(plannedBody, "$.data.id");
+
+        mockMvc.perform(withManager(post("/customer-events/" + plannedEventId + "/cancel"), organizationId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("CANCELLED"))
+                .andExpect(jsonPath("$.data.scheduledAt").value("2026-08-20T10:00:00+09:00"))
+                .andExpect(jsonPath("$.data.occurredAt").doesNotExist());
+    }
+
+    @Test
+    @Transactional
+    @DisplayName("foreign Customer와 Event는 모든 보강 surface에서 404로 은닉한다")
+    void foreignOwnership_isConcealedAcrossCreateListOccurAndCancel() throws Exception {
+        UUID organizationA = UUID.randomUUID();
+        UUID organizationB = UUID.randomUUID();
+        User foreignCustomer = saveCustomer(organizationB, "외부 조직 고객");
+
+        mockMvc.perform(withManager(post("/customer-events"), organizationA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "customerId": "%s",
+                                  "status": "PLANNED",
+                                  "scheduledAt": "2026-08-20T10:00:00+09:00"
+                                }
+                                """.formatted(foreignCustomer.getPublicId())))
+                .andExpect(status().isNotFound());
+
+        String foreignEventBody = mockMvc.perform(withManager(post("/customer-events"), organizationB)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "customerId": "%s",
+                                  "status": "PLANNED",
+                                  "scheduledAt": "2026-08-20T10:00:00+09:00"
+                                }
+                                """.formatted(foreignCustomer.getPublicId())))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String foreignEventId = com.jayway.jsonpath.JsonPath.read(foreignEventBody, "$.data.id");
+
+        mockMvc.perform(withManager(get("/customer-events")
+                        .param("customerId", foreignCustomer.getPublicId().toString()), organizationA))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(withManager(get("/customer-events")
+                        .param("from", "2026-08-01T00:00:00Z")
+                        .param("to", "2026-08-31T23:59:59Z"), organizationA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[*].customerId",
+                        not(hasItem(foreignCustomer.getPublicId().toString()))));
+
+        mockMvc.perform(withManager(post("/customer-events/" + foreignEventId + "/occur"), organizationA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"occurredAt\":\"2026-08-20T10:30:00+09:00\"}"))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(withManager(post("/customer-events/" + foreignEventId + "/cancel"), organizationA))
+                .andExpect(status().isNotFound());
     }
 
     private User saveCustomer(UUID organizationId, String name) {

@@ -15,16 +15,17 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.OffsetDateTime;
-import java.util.Arrays;
-import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -42,6 +43,12 @@ class CustomerEventConcurrencyIntegrationTest {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private TransactionTemplate transactionTemplate;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
     @Test
     void pessimisticLock_allowsOnlyOneTerminalTransition() throws Exception {
         UUID organizationId = UUID.randomUUID();
@@ -53,39 +60,74 @@ class CustomerEventConcurrencyIntegrationTest {
                 customer.getPublicId(), "PLANNED", "2026-08-20T10:00:00+09:00",
                 null, "상담", null)).id();
 
-        CountDownLatch ready = new CountDownLatch(2);
-        CountDownLatch start = new CountDownLatch(1);
+        CountDownLatch lockAcquired = new CountDownLatch(1);
+        CountDownLatch releaseTransactionA = new CountDownLatch(1);
+        CountDownLatch transactionBStarted = new CountDownLatch(1);
         ExecutorService executor = Executors.newFixedThreadPool(2);
         try {
-            Future<ExceptionStatus> occur = executor.submit(() -> runTransition(ready, start,
-                    () -> customerEventService.occur(
-                            organizationId, eventId, OffsetDateTime.parse("2026-08-20T10:30:00+09:00"))));
-            Future<ExceptionStatus> cancel = executor.submit(() -> runTransition(ready, start,
-                    () -> customerEventService.cancel(organizationId, eventId)));
+            Future<?> occur = executor.submit(() -> transactionTemplate.executeWithoutResult(status -> {
+                var event = customerEventRepository
+                        .findByOrganizationIdAndPublicIdForUpdate(organizationId, eventId)
+                        .orElseThrow();
+                event.occur(OffsetDateTime.parse("2026-08-20T10:30:00+09:00"));
+                lockAcquired.countDown();
+                await(releaseTransactionA);
+            }));
 
-            ready.await();
-            start.countDown();
+            assertThat(lockAcquired.await(5, TimeUnit.SECONDS)).isTrue();
 
-            List<ExceptionStatus> results = Arrays.asList(occur.get(), cancel.get());
-            assertThat(results).containsExactlyInAnyOrder(null, ExceptionStatus.INVALID_CUSTOMER_EVENT_TRANSITION);
+            Future<ExceptionStatus> cancel = executor.submit(() -> {
+                transactionBStarted.countDown();
+                try {
+                    customerEventService.cancel(organizationId, eventId);
+                    return null;
+                } catch (CustomException exception) {
+                    return exception.getExceptionStatus();
+                }
+            });
+
+            assertThat(transactionBStarted.await(5, TimeUnit.SECONDS)).isTrue();
+            assertThat(awaitPostgreSqlLockWait()).isTrue();
+            assertThat(cancel.isDone()).isFalse();
+
+            releaseTransactionA.countDown();
+
+            occur.get(5, TimeUnit.SECONDS);
+            assertThat(cancel.get(5, TimeUnit.SECONDS))
+                    .isEqualTo(ExceptionStatus.INVALID_CUSTOMER_EVENT_TRANSITION);
             assertThat(customerEventRepository.findByOrganizationIdAndPublicId(organizationId, eventId))
                     .get()
                     .extracting(event -> event.getStatus())
-                    .isIn(CustomerEventStatus.OCCURRED, CustomerEventStatus.CANCELLED);
+                    .isEqualTo(CustomerEventStatus.OCCURRED);
         } finally {
+            releaseTransactionA.countDown();
             executor.shutdownNow();
         }
     }
 
-    private ExceptionStatus runTransition(
-            CountDownLatch ready, CountDownLatch start, Runnable transition) throws InterruptedException {
-        ready.countDown();
-        start.await();
+    private boolean awaitPostgreSqlLockWait() throws InterruptedException {
+        for (int attempt = 0; attempt < 100; attempt++) {
+            Integer waiting = jdbcTemplate.queryForObject("""
+                    select count(*)
+                    from pg_stat_activity
+                    where pid <> pg_backend_pid()
+                      and wait_event_type = 'Lock'
+                      and lower(query) like '%customer_events%'
+                    """, Integer.class);
+            if (waiting != null && waiting > 0) {
+                return true;
+            }
+            Thread.sleep(25);
+        }
+        return false;
+    }
+
+    private void await(CountDownLatch latch) {
         try {
-            transition.run();
-            return null;
-        } catch (CustomException exception) {
-            return exception.getExceptionStatus();
+            latch.await();
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(exception);
         }
     }
 }
