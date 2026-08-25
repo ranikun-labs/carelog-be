@@ -51,6 +51,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class OAuthExistingAccountAuthenticationIntegrationTest {
 
     private static final String PROVIDER = "test-provider";
+    private static final String STATE = "A".repeat(43);
     private static final URI REDIRECT_URI = URI.create("https://app.example.com/oauth/callback");
 
     @Autowired private UserService userService;
@@ -84,7 +85,7 @@ class OAuthExistingAccountAuthenticationIntegrationTest {
                 authTokenIssuanceService
         );
 
-        OAuthLoginResult result = service.completeLogin(new OAuthCallbackCommand(PROVIDER, "authorization-code", "state"));
+        OAuthLoginResult result = service.completeLogin(new OAuthCallbackCommand(PROVIDER, "authorization-code", STATE));
 
         assertThat(result).isInstanceOfSatisfying(OAuthLoginResult.ExistingAccountAuthenticated.class, authenticated -> {
             AuthTokenBundle tokens = authenticated.tokens();
