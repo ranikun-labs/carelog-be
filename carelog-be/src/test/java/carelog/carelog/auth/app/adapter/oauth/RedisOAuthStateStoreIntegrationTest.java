@@ -1,8 +1,11 @@
 package carelog.carelog.auth.app.adapter.oauth;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import carelog.carelog.auth.app.port.oauth.OAuthBoundProductClient;
 import carelog.carelog.auth.app.port.oauth.OAuthStateRecord;
 import carelog.carelog.auth.app.port.oauth.OAuthStateStoreUnavailableException;
+import carelog.carelog.auth.domain.Product;
+import carelog.carelog.auth.domain.ProductClientChannel;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -89,8 +92,15 @@ class RedisOAuthStateStoreIntegrationTest {
 
     private static OAuthStateRecord record() {
         return new OAuthStateRecord(
-                "provider", URI.create("https://app.example.com/oauth/callback"), "/journals/42",
-                "code-verifier", "nonce", Instant.parse("2026-07-27T00:00:00Z")
+                OAuthStateRecord.CURRENT_VERSION,
+                "provider",
+                URI.create("https://app.example.com/oauth/callback"),
+                new OAuthBoundProductClient("carelog-web", Product.CARELOG, ProductClientChannel.WEB),
+                "/journals/42",
+                "code-verifier",
+                "nonce",
+                Instant.parse("2026-07-27T00:00:00Z"),
+                Instant.parse("2026-07-27T00:05:00Z")
         );
     }
 }

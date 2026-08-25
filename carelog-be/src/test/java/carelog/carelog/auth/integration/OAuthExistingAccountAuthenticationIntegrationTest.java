@@ -5,10 +5,12 @@ import carelog.carelog.PostgreSqlTestContainerConfiguration;
 import carelog.carelog.auth.app.AuthTokenIssuanceService;
 import carelog.carelog.auth.app.oauth.OAuthLoginService;
 import carelog.carelog.auth.app.oauth.OAuthProviderRegistry;
+import carelog.carelog.auth.app.oauth.OAuthStateBindingVerifier;
 import carelog.carelog.auth.app.port.AuthTokenBundle;
 import carelog.carelog.auth.app.port.CRMIdentityProjectionPort;
 import carelog.carelog.auth.app.port.oauth.ExternalIdentityLookupPort;
 import carelog.carelog.auth.app.port.oauth.OAuthAuthorizationRequest;
+import carelog.carelog.auth.app.port.oauth.OAuthBoundProductClient;
 import carelog.carelog.auth.app.port.oauth.OAuthCallbackCommand;
 import carelog.carelog.auth.app.port.oauth.OAuthLoginResult;
 import carelog.carelog.auth.app.port.oauth.OAuthPrincipal;
@@ -17,6 +19,8 @@ import carelog.carelog.auth.app.port.oauth.OAuthStateRecord;
 import carelog.carelog.auth.app.port.oauth.OAuthStateStore;
 import carelog.carelog.auth.app.port.oauth.OAuthTokenGrant;
 import carelog.carelog.auth.domain.RefreshTokenRepository;
+import carelog.carelog.auth.domain.Product;
+import carelog.carelog.auth.domain.ProductClientChannel;
 import carelog.carelog.identity.domain.ExternalIdentity;
 import carelog.carelog.identity.domain.ExternalIdentityRepository;
 import carelog.carelog.user.app.UserService;
@@ -31,6 +35,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.net.URI;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -52,6 +57,8 @@ class OAuthExistingAccountAuthenticationIntegrationTest {
     @Autowired private UserRepository userRepository;
     @Autowired private ExternalIdentityRepository externalIdentityRepository;
     @Autowired private ExternalIdentityLookupPort externalIdentityLookupPort;
+    @Autowired private OAuthStateBindingVerifier stateBindingVerifier;
+    @Autowired private Clock clock;
     @Autowired private CRMIdentityProjectionPort crmIdentityProjectionPort;
     @Autowired private AuthTokenIssuanceService authTokenIssuanceService;
     @Autowired private RefreshTokenRepository refreshTokenRepository;
@@ -71,6 +78,7 @@ class OAuthExistingAccountAuthenticationIntegrationTest {
         OAuthLoginService service = new OAuthLoginService(
                 new OAuthProviderRegistry(List.of(new TestProvider())),
                 new FixedStateStore(state()),
+                stateBindingVerifier,
                 externalIdentityLookupPort,
                 crmIdentityProjectionPort,
                 authTokenIssuanceService
@@ -87,8 +95,19 @@ class OAuthExistingAccountAuthenticationIntegrationTest {
         });
     }
 
-    private static OAuthStateRecord state() {
-        return new OAuthStateRecord(PROVIDER, REDIRECT_URI, "/journals/42", "server-only-verifier", null, Instant.now());
+    private OAuthStateRecord state() {
+        Instant issuedAt = clock.instant().minus(Duration.ofMinutes(1));
+        return new OAuthStateRecord(
+                OAuthStateRecord.CURRENT_VERSION,
+                PROVIDER,
+                REDIRECT_URI,
+                new OAuthBoundProductClient("carelog-web", Product.CARELOG, ProductClientChannel.WEB),
+                "/journals/42",
+                "server-only-verifier",
+                null,
+                issuedAt,
+                issuedAt.plus(Duration.ofMinutes(5))
+        );
     }
 
     private record FixedStateStore(OAuthStateRecord record) implements OAuthStateStore {

@@ -2,11 +2,14 @@ package carelog.carelog.auth.app.adapter.oauth.kakao;
 
 import carelog.carelog.auth.app.adapter.oauth.kakao.dto.KakaoUserResponse;
 import carelog.carelog.auth.app.port.oauth.OAuthAuthorizationRequest;
+import carelog.carelog.auth.app.port.oauth.OAuthBoundProductClient;
 import carelog.carelog.auth.app.port.oauth.OAuthLoginResult;
 import carelog.carelog.auth.app.port.oauth.OAuthPrincipal;
 import carelog.carelog.auth.app.port.oauth.OAuthProviderException;
 import carelog.carelog.auth.app.port.oauth.OAuthStateRecord;
 import carelog.carelog.auth.app.port.oauth.OAuthTokenGrant;
+import carelog.carelog.auth.domain.Product;
+import carelog.carelog.auth.domain.ProductClientChannel;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -77,6 +80,16 @@ class KakaoOAuthProviderAdapterTest {
         return new KakaoOAuthProviderAdapter(client, properties, Clock.fixed(Instant.EPOCH, ZoneOffset.UTC));
     }
     private OAuthStateRecord state() {
-        return new OAuthStateRecord("kakao", URI.create("https://app.example.com/callback"), "/", "verifier", null, Instant.EPOCH);
+        return new OAuthStateRecord(
+                OAuthStateRecord.CURRENT_VERSION,
+                "kakao",
+                URI.create("https://app.example.com/callback"),
+                new OAuthBoundProductClient("carelog-web", Product.CARELOG, ProductClientChannel.WEB),
+                "/",
+                "verifier",
+                null,
+                Instant.EPOCH,
+                Instant.EPOCH.plusSeconds(300)
+        );
     }
 }

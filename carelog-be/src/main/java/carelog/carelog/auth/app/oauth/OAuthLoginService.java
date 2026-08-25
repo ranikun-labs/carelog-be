@@ -25,6 +25,7 @@ public class OAuthLoginService {
 
     private final OAuthProviderRegistry providerRegistry;
     private final OAuthStateStore stateStore;
+    private final OAuthStateBindingVerifier stateBindingVerifier;
     private final ExternalIdentityLookupPort externalIdentityLookupPort;
     private final CRMIdentityProjectionPort crmIdentityProjectionPort;
     private final AuthTokenIssuanceService authTokenIssuanceService;
@@ -33,7 +34,7 @@ public class OAuthLoginService {
         OAuthProviderPort provider = providerRegistry.resolve(command.provider());
         String providerCode = OAuthProviderRegistry.normalize(provider.providerCode());
         Optional<OAuthStateRecord> state = stateStore.consume(command.state());
-        if (state.isEmpty() || !providerCode.equals(OAuthProviderRegistry.normalize(state.get().provider()))) {
+        if (state.isEmpty() || !stateBindingVerifier.verify(providerCode, state.get())) {
             return new OAuthLoginResult.InvalidOrExpiredState();
         }
 
