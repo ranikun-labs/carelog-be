@@ -39,7 +39,7 @@ public class IdentityClaimsInternalApiConfiguration {
             IdentityClaimsServiceTokenFilter serviceTokenFilter
     ) throws Exception {
         http
-                .securityMatcher("/internal/v1/identity/accounts/**")
+                .securityMatcher("/internal/identity/accounts/**")
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

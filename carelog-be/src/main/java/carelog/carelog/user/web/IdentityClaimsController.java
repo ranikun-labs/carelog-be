@@ -17,7 +17,7 @@ import java.util.UUID;
  * 이 계층은 transport DTO와 application query만 연결한다.
  */
 @RestController
-@RequestMapping("/internal/v1/identity/accounts")
+@RequestMapping("/internal/identity/accounts")
 @ConditionalOnProperty(
         prefix = "carelog.internal.identity-claims",
         name = "enabled",

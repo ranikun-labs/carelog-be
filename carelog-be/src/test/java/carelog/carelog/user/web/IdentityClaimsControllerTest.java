@@ -16,9 +16,11 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -48,7 +50,9 @@ class IdentityClaimsControllerTest {
     private static final UUID ACCOUNT_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID ORGANIZATION_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private static final UUID PUBLIC_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
-    private static final String CLAIMS_PATH = "/internal/v1/identity/accounts/" + ACCOUNT_ID + "/claims";
+    private static final String CONTEXT_PATH = "/api/v1";
+    private static final String SERVLET_CLAIMS_PATH = "/internal/identity/accounts/" + ACCOUNT_ID + "/claims";
+    private static final String WIRE_CLAIMS_PATH = CONTEXT_PATH + SERVLET_CLAIMS_PATH;
 
     @Autowired
     private MockMvc mockMvc;
@@ -65,7 +69,13 @@ class IdentityClaimsControllerTest {
                 )
         );
 
-        mockMvc.perform(get(CLAIMS_PATH).header("X-Platform-Service-Token", SERVICE_TOKEN))
+        mockMvc.perform(claimsRequest(ACCOUNT_ID.toString())
+                        .header("X-Platform-Service-Token", SERVICE_TOKEN))
+                .andDo(result -> {
+                    assertThat(result.getRequest().getRequestURI()).isEqualTo(WIRE_CLAIMS_PATH);
+                    assertThat(result.getRequest().getContextPath()).isEqualTo(CONTEXT_PATH);
+                    assertThat(result.getRequest().getServletPath()).isEqualTo(SERVLET_CLAIMS_PATH);
+                })
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.organizationId").value(ORGANIZATION_ID.toString()))
@@ -89,7 +99,8 @@ class IdentityClaimsControllerTest {
         when(claimsQueryService.getClaims(ACCOUNT_ID))
                 .thenThrow(new CustomException(ExceptionStatus.USER_NOT_FOUND));
 
-        mockMvc.perform(get(CLAIMS_PATH).header("X-Platform-Service-Token", SERVICE_TOKEN))
+        mockMvc.perform(claimsRequest(ACCOUNT_ID.toString())
+                        .header("X-Platform-Service-Token", SERVICE_TOKEN))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404))
                 .andExpect(jsonPath("$.message").value(ExceptionStatus.USER_NOT_FOUND.getMessage()));
@@ -101,7 +112,8 @@ class IdentityClaimsControllerTest {
         when(claimsQueryService.getClaims(ACCOUNT_ID))
                 .thenThrow(new IllegalStateException("SQL password_hash detail"));
 
-        mockMvc.perform(get(CLAIMS_PATH).header("X-Platform-Service-Token", SERVICE_TOKEN))
+        mockMvc.perform(claimsRequest(ACCOUNT_ID.toString())
+                        .header("X-Platform-Service-Token", SERVICE_TOKEN))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.status").value(500))
                 .andExpect(jsonPath("$.message").value("서버에 예상치 못한 오류가 발생했습니다."))
@@ -112,7 +124,7 @@ class IdentityClaimsControllerTest {
     @Test
     @DisplayName("service token이 없으면 401이고 Product query를 호출하지 않는다")
     void missingServiceToken_returnsUnauthorized() throws Exception {
-        mockMvc.perform(get(CLAIMS_PATH))
+        mockMvc.perform(claimsRequest(ACCOUNT_ID.toString()))
                 .andExpect(status().isUnauthorized());
 
         verifyNoInteractions(claimsQueryService);
@@ -121,7 +133,8 @@ class IdentityClaimsControllerTest {
     @Test
     @DisplayName("service token이 다르면 401이고 Product query를 호출하지 않는다")
     void invalidServiceToken_returnsUnauthorized() throws Exception {
-        mockMvc.perform(get(CLAIMS_PATH).header("X-Platform-Service-Token", "wrong-token"))
+        mockMvc.perform(claimsRequest(ACCOUNT_ID.toString())
+                        .header("X-Platform-Service-Token", "wrong-token"))
                 .andExpect(status().isUnauthorized());
 
         verifyNoInteractions(claimsQueryService);
@@ -130,11 +143,17 @@ class IdentityClaimsControllerTest {
     @Test
     @DisplayName("accountId가 UUID가 아니면 400으로 응답한다")
     void malformedAccountId_returnsBadRequest() throws Exception {
-        mockMvc.perform(get("/internal/v1/identity/accounts/not-a-uuid/claims")
+        mockMvc.perform(claimsRequest("not-a-uuid")
                         .header("X-Platform-Service-Token", SERVICE_TOKEN))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400));
 
         verifyNoInteractions(claimsQueryService);
+    }
+
+    private static MockHttpServletRequestBuilder claimsRequest(String accountId) {
+        return get(CONTEXT_PATH + "/internal/identity/accounts/" + accountId + "/claims")
+                .contextPath(CONTEXT_PATH)
+                .servletPath("/internal/identity/accounts/" + accountId + "/claims");
     }
 }

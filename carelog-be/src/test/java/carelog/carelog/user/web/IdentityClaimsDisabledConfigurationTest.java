@@ -26,6 +26,6 @@ class IdentityClaimsDisabledConfigurationTest {
     void disabledMode_doesNotRegisterEndpoint() {
         assertThat(handlerMapping.getHandlerMethods().keySet())
                 .noneMatch(mapping -> mapping.getPatternValues().contains(
-                        "/internal/v1/identity/accounts/{accountId}/claims"));
+                        "/internal/identity/accounts/{accountId}/claims"));
     }
 }
