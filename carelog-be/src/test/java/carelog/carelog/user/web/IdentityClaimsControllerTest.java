@@ -12,11 +12,16 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
 
@@ -42,7 +47,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         JwtAuthenticationEntryPoint.class,
         JwtAccessDeniedHandler.class,
         IdentityClaimsInternalApiConfiguration.class,
-        GlobalExceptionHandler.class
+        GlobalExceptionHandler.class,
+        IdentityClaimsControllerTest.NonPrivateRouteProbeConfiguration.class
 })
 class IdentityClaimsControllerTest {
 
@@ -56,6 +62,9 @@ class IdentityClaimsControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private ApplicationContext applicationContext;
 
     @MockitoBean
     private ProductIdentityClaimsQueryService claimsQueryService;
@@ -151,9 +160,41 @@ class IdentityClaimsControllerTest {
         verifyNoInteractions(claimsQueryService);
     }
 
+    @Test
+    @DisplayName("Identity claims service token filter는 비공개 claims 경로 밖의 요청을 가로채지 않는다")
+    void nonPrivateRoute_doesNotUseIdentityClaimsServiceTokenFilter() throws Exception {
+        assertThat(applicationContext.getBeansOfType(IdentityClaimsServiceTokenFilter.class))
+                .isEmpty();
+
+        mockMvc.perform(get(CONTEXT_PATH + "/auth/login")
+                        .contextPath(CONTEXT_PATH)
+                        .servletPath("/auth/login")
+                        .header("X-Gateway-Secret", "test-gateway-internal-secret"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("non-private-route"));
+    }
+
     private static MockHttpServletRequestBuilder claimsRequest(String accountId) {
         return get(CONTEXT_PATH + "/internal/identity/accounts/" + accountId + "/claims")
                 .contextPath(CONTEXT_PATH)
                 .servletPath("/internal/identity/accounts/" + accountId + "/claims");
+    }
+
+    @TestConfiguration(proxyBeanMethods = false)
+    static class NonPrivateRouteProbeConfiguration {
+
+        @Bean
+        NonPrivateRouteProbeController nonPrivateRouteProbeController() {
+            return new NonPrivateRouteProbeController();
+        }
+    }
+
+    @RestController
+    static class NonPrivateRouteProbeController {
+
+        @GetMapping("/auth/login")
+        String probe() {
+            return "non-private-route";
+        }
     }
 }

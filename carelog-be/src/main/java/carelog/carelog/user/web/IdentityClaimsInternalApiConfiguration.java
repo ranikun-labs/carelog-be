@@ -26,18 +26,14 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class IdentityClaimsInternalApiConfiguration {
 
     @Bean
-    IdentityClaimsServiceTokenFilter identityClaimsServiceTokenFilter(
-            IdentityClaimsInternalApiProperties properties
-    ) {
-        return new IdentityClaimsServiceTokenFilter(properties.requiredServiceToken());
-    }
-
-    @Bean
     @Order(1)
     SecurityFilterChain identityClaimsSecurityFilterChain(
             HttpSecurity http,
-            IdentityClaimsServiceTokenFilter serviceTokenFilter
+            IdentityClaimsInternalApiProperties properties
     ) throws Exception {
+        IdentityClaimsServiceTokenFilter serviceTokenFilter =
+                new IdentityClaimsServiceTokenFilter(properties.requiredServiceToken());
+
         http
                 .securityMatcher("/internal/identity/accounts/**")
                 .csrf(csrf -> csrf.disable())
