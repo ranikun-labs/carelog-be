@@ -16,7 +16,8 @@ import reactor.core.publisher.Mono
 class JwtGlobalFilter(
     private val jwtVerifier: JwtVerifier,
     private val blacklistService: RedisBlacklistService,
-    private val gatewayConfig: GatewayConfig
+    private val gatewayConfig: GatewayConfig,
+    private val oauthPublicRequestMatcher: OAuthPublicRequestMatcher
 ) : GlobalFilter, Ordered {
 
     private val publicPaths get() = gatewayConfig.publicPaths
@@ -43,7 +44,7 @@ class JwtGlobalFilter(
             .build()
 
         // 공개 경로는 JWT 검증 없이 통과 (단, X-Gateway-Secret은 붙임)
-        if (publicPaths.any { path.startsWith(it) }) {
+        if (oauthPublicRequestMatcher.matches(request) || publicPaths.any { path.startsWith(it) }) {
             val publicExchange = sanitizedExchange.mutate()
                 .request { it.headers { headers -> headers.set("X-Gateway-Secret", internalSecret) } }
                 .build()

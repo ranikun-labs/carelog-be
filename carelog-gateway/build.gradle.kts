@@ -22,6 +22,7 @@ dependencies {
 
     // Redis — SCG는 Reactive라서 reactive 버전 사용
     implementation("org.springframework.boot:spring-boot-starter-data-redis-reactive")
+    implementation("org.springframework.boot:spring-boot-starter-validation")
 
     // JWT 검증용
     implementation("io.jsonwebtoken:jjwt-api:0.12.3")
