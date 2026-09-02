@@ -102,17 +102,63 @@ class JwtGlobalFilterCharacterizationTest {
 
     // ---------- Public Path ----------
 
-    @DisplayName("공개 경로는 JWT 검증 없이 통과하고 X-Gateway-Secret만 주입하며 인입 identity 헤더는 제거한다")
+    @DisplayName("공개 경로는 JWT 검증 없이 통과하고 X-Gateway-Secret만 주입하며 인입 identity/서비스 헤더는 제거한다")
     @Test
     fun publicPath_skipsAuthenticationAndInjectsGatewaySecretOnly() {
-        val ex = exchange(HttpMethod.POST, "/api/v1/auth/login", mapOf("X-User-Id" to "spoofed"))
+        val ex = exchange(
+            HttpMethod.POST,
+            "/api/v1/auth/login",
+            mapOf(
+                "X-User-Id" to "spoofed",
+                "X-Service-Id" to "spoofed-service",
+                "X-Service-Secret" to "spoofed-service-secret"
+            )
+        )
 
         filter.filter(ex, chain).block()
 
         assertThat(capturedExchange).isNotNull()
         assertThat(headerOf("X-Gateway-Secret")).isEqualTo(internalSecret)
         assertThat(headerOf("X-User-Id")).isNull()
+        assertThat(headerOf("X-Service-Id")).isNull()
+        assertThat(headerOf("X-Service-Secret")).isNull()
         verifyNoInteractions(redisTemplate)
+    }
+
+    @DisplayName("ADR-0019: /api/v1/internal 경로는 인증 처리 전에 403으로 거부되고 downstream을 호출하지 않는다")
+    @ParameterizedTest
+    @ValueSource(strings = [
+        "/api/v1/internal",
+        "/api/v1/internal/identity/claims/9f8c1f5a-8a1a-4f9f-b9e3-2cc1d3b1a123"
+    ])
+    fun internalPath_isRejectedBeforeAuthentication(path: String) {
+        val ex = exchange(
+            HttpMethod.GET,
+            path,
+            mapOf(
+                "Authorization" to "Bearer not-used",
+                "X-Service-Id" to "platform-identity",
+                "X-Service-Secret" to "platform-identity-service-secret-0123456789"
+            )
+        )
+
+        filter.filter(ex, chain).block()
+
+        assertThat(ex.response.statusCode).isEqualTo(HttpStatus.FORBIDDEN)
+        assertThat(capturedExchange).isNull()
+        verifyNoInteractions(redisTemplate)
+    }
+
+    @DisplayName("/api/v1/internal로 시작하지 않는 유사 경로는 내부 경로 차단에 걸리지 않는다")
+    @Test
+    fun pathThatOnlyPrefixMatchesInternal_isNotTreatedAsInternal() {
+        val ex = exchange(HttpMethod.GET, "/api/v1/internal-reports", mapOf("Authorization" to "Bearer not-used"))
+
+        filter.filter(ex, chain).block()
+
+        // 401(보호 경로, Authorization 형식은 유효하지만 서명 검증 전에 걸림)이 아니라
+        // 403(내부 경로 차단)이 아니어야 한다는 것만 고정한다 — 실제 인증 흐름을 계속 탄다.
+        assertThat(ex.response.statusCode).isNotEqualTo(HttpStatus.FORBIDDEN)
     }
 
     @DisplayName("공개 경로 prefix에 걸리는 확장 경로(login-extra)도 현재 startsWith 구현상 공개로 처리된다 (Risk)")
@@ -252,7 +298,9 @@ class JwtGlobalFilterCharacterizationTest {
                 "X-Organization-Id" to "evil-org",
                 "X-Role" to "ADMIN",
                 "X-Public-Id" to "evil-public",
-                "X-Gateway-Secret" to "leaked-secret"
+                "X-Gateway-Secret" to "leaked-secret",
+                "X-Service-Id" to "spoofed-service",
+                "X-Service-Secret" to "spoofed-service-secret"
             )
         )
 
@@ -264,6 +312,8 @@ class JwtGlobalFilterCharacterizationTest {
         assertThat(headerOf("X-Role")).isEqualTo("MANAGER")
         assertThat(headerOf("X-Public-Id")).isEqualTo(publicId)
         assertThat(headerOf("X-Gateway-Secret")).isEqualTo(internalSecret)
+        assertThat(headerOf("X-Service-Id")).isNull()
+        assertThat(headerOf("X-Service-Secret")).isNull()
     }
 
     @DisplayName("선택 claim이 없으면 organizationId/publicId 헤더는 생략되고 role은 빈 문자열로 주입된다 (현재 비대칭 동작)")

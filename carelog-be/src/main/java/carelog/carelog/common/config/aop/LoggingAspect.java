@@ -99,11 +99,18 @@ public class LoggingAspect {
 
     /**
      * 예외 발생 로깅
+     *
+     * <p>RPL-55: {@code carelog.carelog.auth.web.internal} 패키지(ADR-0019 internal
+     * service-auth 경계)도 {@code @ConfigurationProperties} record와 동일한 이유로 제외한다 —
+     * 이 패키지의 {@code InternalServiceCredentialVerifier}/{@code InternalServiceForbiddenHandler}
+     * 등은 immutable/final 형태를 유지해야 하는 보안 경계 컴포넌트이므로, 개별 클래스마다 final을
+     * 해제하는 대신 패키지 단위로 이 광범위한 pointcut의 CGLIB 대상에서 제외한다.
      */
     @AfterThrowing(
             pointcut = "execution(* carelog.carelog..*(..))"
                     + " && !within(*..*Filter)"
-                    + " && !@within(org.springframework.boot.context.properties.ConfigurationProperties)",
+                    + " && !@within(org.springframework.boot.context.properties.ConfigurationProperties)"
+                    + " && !within(carelog.carelog.auth.web.internal..*)",
             throwing = "ex")
     public void logException(JoinPoint joinPoint, Exception ex) {
         String className = getSimpleClassName(joinPoint);

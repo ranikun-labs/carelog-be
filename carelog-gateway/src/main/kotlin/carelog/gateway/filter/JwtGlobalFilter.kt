@@ -29,7 +29,7 @@ class JwtGlobalFilter(
         val request = exchange.request
         val path = request.uri.path
 
-        // 헤더 스푸핑 방어 - 인입 요청의 X-User-* 헤더 제거
+        // 헤더 스푸핑 방어 - 인입 요청의 사용자·Gateway·서비스 인증 헤더 제거
         val sanitizedExchange = exchange.mutate()
             .request {
                 it.headers { headers ->
@@ -38,9 +38,19 @@ class JwtGlobalFilter(
                     headers.remove("X-Role")
                     headers.remove("X-Public-Id")
                     headers.remove("X-Gateway-Secret")
+                    headers.remove("X-Service-Id")
+                    headers.remove("X-Service-Secret")
                 }
             }
             .build()
+
+        // ADR-0019: /api/v1/internal/**은 public edge에서 방어적으로 차단한다.
+        // Carelog 자체 internal SecurityFilterChain이 authoritative verifier이며, 이 차단은
+        // defense in depth일 뿐이다.
+        if (isInternalPath(path)) {
+            exchange.response.statusCode = HttpStatus.FORBIDDEN
+            return exchange.response.setComplete()
+        }
 
         // 공개 경로는 JWT 검증 없이 통과 (단, X-Gateway-Secret은 붙임)
         if (publicPaths.any { path.startsWith(it) }) {
@@ -91,4 +101,7 @@ class JwtGlobalFilter(
     }
 
     override fun getOrder(): Int = -1
+
+    private fun isInternalPath(path: String): Boolean =
+        path == "/api/v1/internal" || path.startsWith("/api/v1/internal/")
 }

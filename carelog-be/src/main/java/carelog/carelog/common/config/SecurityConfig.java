@@ -8,6 +8,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.*;
 import org.springframework.security.config.annotation.authentication.configuration.*;
 import org.springframework.security.config.annotation.method.configuration.*;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.config.annotation.web.builders.*;
 import org.springframework.security.config.annotation.web.configuration.*;
 import org.springframework.security.config.http.*;
@@ -40,7 +41,14 @@ public class SecurityConfig {
     @Value("${gateway.internal-secret}")
     private String internalSecret;
 
+    /**
+     * 일반 Product chain — ADR-0019 internal 경계와 별개로 {@code /internal/**}은 이 chain에서도
+     * 항상 denyAll이다. {@code carelog.internal.identity-claims.enabled=false}일 때는
+     * {@link carelog.carelog.auth.web.internal.InternalIdentitySecurityConfiguration}이 아예
+     * 등록되지 않으므로, {@code /internal/**}에 대한 유일한 차단 지점이 이 chain이 된다.
+     */
     @Bean
+    @Order(2)
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -55,6 +63,7 @@ public class SecurityConfig {
                 )
 
                 .authorizeHttpRequests(auth -> auth
+                                .requestMatchers("/internal/**").denyAll()
                                 .requestMatchers(
                                         HttpMethod.POST,
                                         "/auth/oauth/kakao/authorization",

@@ -3,7 +3,7 @@ package carelog.carelog.common.config.aop;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import carelog.carelog.user.web.IdentityClaimsInternalApiProperties;
+import carelog.carelog.auth.web.internal.IdentityClaimsInternalApiProperties;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.aop.support.AopUtils;
@@ -30,7 +30,7 @@ import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 @SpringJUnitConfig(LoggingAspectConfigurationPropertiesIsolationTest.TestConfig.class)
 @TestPropertySource(properties = {
         "carelog.internal.identity-claims.enabled=true",
-        "carelog.internal.identity-claims.service-token=test-only-token"
+        "carelog.internal.identity-claims.service-secret=test-only-service-secret-0123456789"
 })
 class LoggingAspectConfigurationPropertiesIsolationTest {
 
@@ -53,7 +53,8 @@ class LoggingAspectConfigurationPropertiesIsolationTest {
     @DisplayName("@ConfigurationProperties record는 여전히 configuration data holder로 정상 사용 가능하다")
     void configurationPropertiesRecordRemainsUsable() {
         assertThat(identityClaimsInternalApiProperties.enabled()).isTrue();
-        assertThat(identityClaimsInternalApiProperties.requiredServiceToken()).isEqualTo("test-only-token");
+        assertThat(identityClaimsInternalApiProperties.serviceSecret())
+                .isEqualTo("test-only-service-secret-0123456789");
     }
 
     @Test

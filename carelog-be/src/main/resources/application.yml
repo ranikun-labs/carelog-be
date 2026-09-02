@@ -37,7 +37,7 @@ carelog:
   internal:
     identity-claims:
       enabled: ${CARELOG_INTERNAL_IDENTITY_CLAIMS_ENABLED:false}
-      service-token: ${CARELOG_INTERNAL_IDENTITY_CLAIMS_SERVICE_TOKEN:}
+      service-secret: ${CARELOG_INTERNAL_IDENTITY_CLAIMS_SERVICE_SECRET:}
 
 oauth:
   state:
