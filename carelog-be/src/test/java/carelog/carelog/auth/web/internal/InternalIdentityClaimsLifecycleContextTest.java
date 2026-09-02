@@ -36,7 +36,7 @@ class InternalIdentityClaimsLifecycleContextTest {
 
     private static final String VALID_SERVICE_SECRET =
             "full-context-service-secret-0123456789-abcdef";
-    private static final String GATEWAY_SECRET = "test-gateway-internal-secret";
+    private static final String GATEWAY_SECRET = "test-gateway-internal-secret-0123456789";
 
     private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(
@@ -132,13 +132,20 @@ class InternalIdentityClaimsLifecycleContextTest {
                 .withPropertyValues(
                         "carelog.internal.identity-claims.enabled=true",
                         "carelog.internal.identity-claims.service-secret=" + GATEWAY_SECRET)
-                .run(this::assertFailedDueToCredentialValidation);
+                .run(this::assertFailedDueToEqualCredentialValidation);
     }
 
     private void assertFailedDueToCredentialValidation(AssertableWebApplicationContext context) {
         assertThat(context).hasFailed();
         assertThatThrownBy(() -> context.getBean(InternalServiceCredentialVerifier.class))
                 .hasRootCauseInstanceOf(IllegalStateException.class);
+    }
+
+    private void assertFailedDueToEqualCredentialValidation(AssertableWebApplicationContext context) {
+        assertThat(context).hasFailed();
+        assertThatThrownBy(() -> context.getBean(InternalServiceCredentialVerifier.class))
+                .hasRootCauseMessage(
+                        "carelog.internal.identity-claims.service-secret must differ from gateway.internal-secret");
     }
 
     private WebApplicationContextRunner enabledRunner(String serviceSecret) {

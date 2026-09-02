@@ -1,6 +1,7 @@
 package carelog.carelog.auth.web.internal;
 
 import carelog.carelog.auth.app.adapter.LegacyCrmIdentityProjectionAdapter;
+import carelog.carelog.common.web.exception.GlobalExceptionHandler;
 import carelog.carelog.user.domain.ManagerType;
 import carelog.carelog.user.domain.User;
 import carelog.carelog.user.domain.UserRepository;
@@ -47,7 +48,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import({
         LegacyCrmIdentityProjectionAdapter.class,
         InternalIdentitySecurityConfiguration.class,
-        InternalIdentityProjectionExceptionHandler.class
+        InternalIdentityProjectionExceptionHandler.class,
+        GlobalExceptionHandler.class
 })
 class InternalIdentityClaimsControllerTest {
 
@@ -151,7 +153,8 @@ class InternalIdentityClaimsControllerTest {
     @Test
     void malformedAccountId_isBadRequestAfterServiceAuthentication() throws Exception {
         mockMvc.perform(serviceGet("not-a-uuid"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string(""));
 
         verifyNoInteractions(userRepository);
     }
@@ -162,7 +165,8 @@ class InternalIdentityClaimsControllerTest {
                 .thenThrow(new IllegalStateException("database unavailable"));
 
         mockMvc.perform(serviceGet(ACCOUNT_ID))
-                .andExpect(status().isInternalServerError());
+                .andExpect(status().isInternalServerError())
+                .andExpect(content().string(""));
     }
 
     @Test
