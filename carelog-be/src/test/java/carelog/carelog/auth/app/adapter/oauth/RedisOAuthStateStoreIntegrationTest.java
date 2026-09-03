@@ -1,8 +1,11 @@
 package carelog.carelog.auth.app.adapter.oauth;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import carelog.carelog.auth.app.port.oauth.OAuthBoundProductClient;
 import carelog.carelog.auth.app.port.oauth.OAuthStateRecord;
 import carelog.carelog.auth.app.port.oauth.OAuthStateStoreUnavailableException;
+import carelog.carelog.auth.domain.Product;
+import carelog.carelog.auth.domain.ProductClientChannel;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -14,6 +17,14 @@ import org.testcontainers.utility.DockerImageName;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -54,6 +65,36 @@ class RedisOAuthStateStoreIntegrationTest {
     }
 
     @Test
+    void 동일_state의_동시_GETDEL은_정확히_한_소비자만_성공시킨다() throws Exception {
+        store.save("concurrent-state", record(), Duration.ofMinutes(1));
+        CyclicBarrier barrier = new CyclicBarrier(2);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+
+        try {
+            Callable<Optional<OAuthStateRecord>> consumer = () -> {
+                barrier.await(10, TimeUnit.SECONDS);
+                return store.consume("concurrent-state");
+            };
+            List<Future<Optional<OAuthStateRecord>>> results = executor.invokeAll(List.of(consumer, consumer));
+
+            long successCount = 0;
+            long emptyCount = 0;
+            for (Future<Optional<OAuthStateRecord>> result : results) {
+                if (result.get().isPresent()) {
+                    successCount++;
+                } else {
+                    emptyCount++;
+                }
+            }
+
+            assertThat(successCount).isEqualTo(1);
+            assertThat(emptyCount).isEqualTo(1);
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
     void TTL이_만료된_state는_없음으로_반환한다() throws InterruptedException {
         store.save("expiring-state", record(), Duration.ofMillis(100));
 
@@ -89,8 +130,15 @@ class RedisOAuthStateStoreIntegrationTest {
 
     private static OAuthStateRecord record() {
         return new OAuthStateRecord(
-                "provider", URI.create("https://app.example.com/oauth/callback"), "/journals/42",
-                "code-verifier", "nonce", Instant.parse("2026-07-27T00:00:00Z")
+                OAuthStateRecord.CURRENT_VERSION,
+                "provider",
+                URI.create("https://app.example.com/oauth/callback"),
+                new OAuthBoundProductClient("carelog-web", Product.CARELOG, ProductClientChannel.WEB),
+                "/journals/42",
+                "code-verifier",
+                "nonce",
+                Instant.parse("2026-07-27T00:00:00Z"),
+                Instant.parse("2026-07-27T00:05:00Z")
         );
     }
 }
