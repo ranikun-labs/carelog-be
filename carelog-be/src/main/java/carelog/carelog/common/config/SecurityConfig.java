@@ -3,6 +3,7 @@ package carelog.carelog.common.config;
 import carelog.carelog.auth.web.*;
 import lombok.*;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.actuate.autoconfigure.security.servlet.EndpointRequest;
 import org.springframework.context.annotation.*;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.*;
@@ -31,15 +32,48 @@ public class SecurityConfig {
             "/auth/login",
             "/auth/refresh",
             "/users/managers",
-            "/swagger-ui/**",
-            "/v3/api-docs/**",
             "/api/v1",
             "/error"
+    };
+    private static final String[] SWAGGER_URLS = {
+            "/swagger-ui.html",
+            "/swagger-ui/**",
+            "/v3/api-docs",
+            "/v3/api-docs/**"
     };
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
     @Value("${gateway.internal-secret}")
     private String internalSecret;
+    @Value("${carelog.security.swagger.public:true}")
+    private boolean swaggerPublic;
+    @Value("${carelog.security.cors.allow-any-origin:true}")
+    private boolean corsAllowAnyOrigin;
+    @Value("${carelog.security.cors.allowed-origins:}")
+    private List<String> corsAllowedOrigins;
+    @Value("${carelog.security.cors.allow-credentials:true}")
+    private boolean corsAllowCredentials;
+    @Value("${carelog.security.cors.allowed-methods:GET,POST,PUT,PATCH,DELETE,OPTIONS}")
+    private List<String> corsAllowedMethods;
+    @Value("${carelog.security.cors.allowed-headers:*}")
+    private List<String> corsAllowedHeaders;
+
+    /**
+     * Actuator는 별도 management port에 두고 Compose에서 host loopback에만 publish한다.
+     * 이 체인은 health/metrics 전용 port에서만 사용하며 Product API의 Gateway 경계는 바꾸지 않는다.
+     */
+    @Bean
+    @Order(1)
+    SecurityFilterChain actuatorSecurityFilterChain(HttpSecurity http) throws Exception {
+        http
+                .securityMatcher(EndpointRequest.toAnyEndpoint())
+                .csrf(csrf -> csrf.disable())
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
+
+        return http.build();
+    }
 
     /**
      * 일반 Product chain — ADR-0019 internal 경계와 별개로 {@code /internal/**}은 이 chain에서도
@@ -62,34 +96,21 @@ public class SecurityConfig {
                         .accessDeniedHandler(jwtAccessDeniedHandler)
                 )
 
-                .authorizeHttpRequests(auth -> auth
-                                .requestMatchers("/internal/**").denyAll()
-                                .requestMatchers(
-                                        HttpMethod.POST,
-                                        "/auth/oauth/kakao/authorization",
-                                        "/auth/oauth/kakao/exchange"
-                                ).permitAll()
-                                .requestMatchers(PUBLIC_URLS).permitAll()
-                                .anyRequest().authenticated()
-                        // 운영용이라 차후에 활성화
-//                        .requestMatchers(
-//                                new AntPathRequestMatcher("/"),
-//                                new AntPathRequestMatcher("/api/v1"),
-//                                new AntPathRequestMatcher("/api/v1/"),
-//                                new AntPathRequestMatcher("/login"),
-//                                new AntPathRequestMatcher("/api/auth/signup"),
-//                                new AntPathRequestMatcher("/users"),
-//                                new AntPathRequestMatcher("/api/health"),
-//                                new AntPathRequestMatcher("/error**"),
-//                                new AntPathRequestMatcher("/api/v1/error**")
-//                        ).permitAll()
-//                        .requestMatchers("/css/**", "/js/**", "/images/**").permitAll()
-//                        .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll() // API 문서 허용
-//                        ---- 아래 authenticated가 보안 로직 ----
-//                        .anyRequest().authenticated());
-                        // 개발중: 모든 요청 허용
-//                        .anyRequest().permitAll());
-                )
+                .authorizeHttpRequests(auth -> {
+                    auth.requestMatchers("/internal/**").denyAll();
+                    auth.requestMatchers(
+                            HttpMethod.POST,
+                            "/auth/oauth/kakao/authorization",
+                            "/auth/oauth/kakao/exchange"
+                    ).permitAll();
+                    auth.requestMatchers(PUBLIC_URLS).permitAll();
+                    if (swaggerPublic) {
+                        auth.requestMatchers(SWAGGER_URLS).permitAll();
+                    } else {
+                        auth.requestMatchers(SWAGGER_URLS).denyAll();
+                    }
+                    auth.anyRequest().authenticated();
+                })
 
                 .addFilterBefore(
                         new GatewayHeaderAuthFilter(internalSecret),
@@ -114,10 +135,21 @@ public class SecurityConfig {
     @Bean
     CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(List.of("*"));
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("*"));
-        config.setAllowCredentials(true);
+        if (corsAllowAnyOrigin) {
+            config.setAllowedOriginPatterns(List.of("*"));
+        } else {
+            if (corsAllowedOrigins == null || corsAllowedOrigins.isEmpty()
+                    || corsAllowedOrigins.stream().anyMatch(origin ->
+                    origin == null || origin.isBlank() || origin.contains("*"))) {
+                throw new IllegalStateException(
+                        "Production CORS requires one or more exact, non-wildcard Origins");
+            }
+            config.setAllowedOrigins(corsAllowedOrigins);
+        }
+        config.setAllowedMethods(corsAllowedMethods);
+        config.setAllowedHeaders(corsAllowedHeaders);
+        config.setAllowCredentials(corsAllowCredentials);
+        config.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
         return source;

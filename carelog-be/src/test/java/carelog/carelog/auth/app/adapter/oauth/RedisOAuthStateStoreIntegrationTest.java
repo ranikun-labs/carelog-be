@@ -20,7 +20,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class RedisOAuthStateStoreIntegrationTest {
 
-    private static final GenericContainer<?> REDIS = new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
+    private static final GenericContainer<?> REDIS = new GenericContainer<>(DockerImageName.parse(
+            "valkey/valkey:8.1.0-alpine@sha256:93df46243b1d033a2d8f3ffc34122c6e431fbb315c5cff246ce6f77cf5a09f5b"))
             .withExposedPorts(6379);
 
     private static LettuceConnectionFactory connectionFactory;

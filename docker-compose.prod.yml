@@ -1,0 +1,71 @@
+services:
+  carelog-be:
+    image: ${CARELOG_IMAGE:?Set CARELOG_IMAGE to a built image tag or digest}
+    init: true
+    restart: unless-stopped
+    stop_signal: SIGTERM
+    stop_grace_period: 45s
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: ${CARELOG_MEMORY_LIMIT:-1g}
+    ports:
+      - target: 8080
+        published: ${CARELOG_HTTP_PORT:-8080}
+        host_ip: ${CARELOG_BIND_ADDRESS:?Set CARELOG_BIND_ADDRESS to the EC2 private interface IPv4}
+        protocol: tcp
+      - target: 8081
+        published: ${CARELOG_MANAGEMENT_HOST_PORT:-19090}
+        host_ip: 127.0.0.1
+        protocol: tcp
+    volumes:
+      - type: bind
+        source: ${CARELOG_SECRET_DIR:?Set CARELOG_SECRET_DIR to the external runtime secret directory}
+        target: /run/secrets
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${CARELOG_RDS_CA_FILE:?Set CARELOG_RDS_CA_FILE to the AWS RDS CA bundle path}
+        target: /run/rds-ca.pem
+        read_only: true
+        bind:
+          create_host_path: false
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      CARELOG_ENVIRONMENT: ${CARELOG_ENVIRONMENT:-production}
+      CARELOG_CORS_ALLOWED_ORIGINS: ${CARELOG_CORS_ALLOWED_ORIGINS:?Set the exact Carelog browser Origin allowlist}
+      CARELOG_FLYWAY_ENABLED: ${CARELOG_FLYWAY_ENABLED:-false}
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:?Set the private RDS JDBC URL}
+      JWT_ACCESS_TOKEN_VALIDITY: ${JWT_ACCESS_TOKEN_VALIDITY:?Set the existing Carelog access-token validity in milliseconds}
+      JWT_REFRESH_TOKEN_VALIDITY: ${JWT_REFRESH_TOKEN_VALIDITY:?Set the existing Carelog refresh-token validity in milliseconds}
+      REDIS_HOST: ${VALKEY_HOST:?Set the private Valkey DNS name or IP}
+      REDIS_PORT: ${VALKEY_PORT:-6379}
+      VALKEY_TLS_ENABLED: ${VALKEY_TLS_ENABLED:-true}
+      SERVER_ADDRESS: 0.0.0.0
+      SERVER_PORT: "8080"
+      CARELOG_MANAGEMENT_PORT: "8081"
+    healthcheck:
+      test:
+        - CMD
+        - /usr/local/bin/busybox
+        - wget
+        - -q
+        - -Y
+        - off
+        - --spider
+        - http://127.0.0.1:8081/actuator/health/readiness
+      interval: 30s
+      timeout: 5s
+      start_period: 90s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
