@@ -4,6 +4,7 @@ import carelog.carelog.auth.web.*;
 import lombok.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.actuate.autoconfigure.security.servlet.EndpointRequest;
+import org.springframework.boot.actuate.autoconfigure.web.server.ManagementPortType;
 import org.springframework.context.annotation.*;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.*;
@@ -82,11 +83,7 @@ public class SecurityConfig {
     static class SeparateManagementPortCondition implements Condition {
         @Override
         public boolean matches(ConditionContext context, AnnotatedTypeMetadata metadata) {
-            int applicationPort = context.getEnvironment()
-                    .getProperty("server.port", Integer.class, 8080);
-            int managementPort = context.getEnvironment()
-                    .getProperty("management.server.port", Integer.class, applicationPort);
-            return managementPort != applicationPort;
+            return ManagementPortType.get(context.getEnvironment()) == ManagementPortType.DIFFERENT;
         }
     }
 
