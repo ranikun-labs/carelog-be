@@ -10,6 +10,7 @@ import org.springframework.security.authentication.*;
 import org.springframework.security.config.annotation.authentication.configuration.*;
 import org.springframework.security.config.annotation.method.configuration.*;
 import org.springframework.core.annotation.Order;
+import org.springframework.core.type.AnnotatedTypeMetadata;
 import org.springframework.security.config.annotation.web.builders.*;
 import org.springframework.security.config.annotation.web.configuration.*;
 import org.springframework.security.config.http.*;
@@ -64,6 +65,8 @@ public class SecurityConfig {
      */
     @Bean
     @Order(1)
+    @Profile("prod")
+    @Conditional(SeparateManagementPortCondition.class)
     SecurityFilterChain actuatorSecurityFilterChain(HttpSecurity http) throws Exception {
         http
                 .securityMatcher(EndpointRequest.toAnyEndpoint())
@@ -73,6 +76,18 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
 
         return http.build();
+    }
+
+    /** Management listener가 실제 application listener와 분리된 prod 인스턴스에서만 health를 공개한다. */
+    static class SeparateManagementPortCondition implements Condition {
+        @Override
+        public boolean matches(ConditionContext context, AnnotatedTypeMetadata metadata) {
+            int applicationPort = context.getEnvironment()
+                    .getProperty("server.port", Integer.class, 8080);
+            int managementPort = context.getEnvironment()
+                    .getProperty("management.server.port", Integer.class, applicationPort);
+            return managementPort != applicationPort;
+        }
     }
 
     /**

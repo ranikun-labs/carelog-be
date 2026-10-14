@@ -4,7 +4,7 @@
 
 The production Compose file runs only `carelog-be`. Build the image from the repository root with `carelog-be/Dockerfile`; Compose consumes a prebuilt image selected by `CARELOG_IMAGE`. The legacy `carelog-gateway` project is not packaged. V1 ingress remains `platform-services/gateway-app`.
 
-The application listens on container port `8080`. Bind the host port to the Carelog EC2 private interface and allow inbound TCP `8080` only from the shared Gateway security group. Do not add an Internet-wide rule. Docker publishes the management port as `127.0.0.1:19090` on the EC2 host; do not add it to an EC2 security group. A host-local Alloy process can scrape `http://127.0.0.1:19090/actuator/prometheus`.
+The application listens on container port `8080`. Bind the host port to the Carelog EC2 private interface and allow inbound TCP `8080` only from the shared Gateway security group. Do not add an Internet-wide rule. Docker publishes the management port as `127.0.0.1:19090` on the EC2 host; do not add it to an EC2 security group. This host bind does not isolate the listener from other containers attached to the same Docker network. Keep untrusted workloads off that network and validate host-local scraping separately. A host-local Alloy process can scrape `http://127.0.0.1:19090/actuator/prometheus`.
 
 RDS and Valkey are external services and are not Compose services. Permit Carelog EC2 egress to the selected RDS endpoint on TCP `5432` and Valkey private endpoint on TCP `6379`. RDS must have public access disabled. Valkey must not be reachable from the public Internet. Configure private DNS or private IP routing and security group rules; Docker bridge networks are not shared with Gateway or other EC2 hosts.
 
