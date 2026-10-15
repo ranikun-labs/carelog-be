@@ -1,5 +1,6 @@
 package carelog.carelog.common.metrics;
 
+import carelog.carelog.auth.app.port.oauth.OAuthStateStoreUnavailableException;
 import carelog.carelog.common.web.exception.GlobalExceptionHandler;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
@@ -24,6 +25,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -68,6 +70,9 @@ class HttpObservabilityIntegrationTest {
         assertThat(timeout.statusCode()).isEqualTo(500);
         assertThat(timeout.body()).contains("서버에 예상치 못한 오류가 발생했습니다.");
 
+        HttpResponse<String> dependencyUnavailable = request("/api/v1/probe/dependency-unavailable");
+        assertThat(dependencyUnavailable.statusCode()).isEqualTo(503);
+
         Timer successTimer = meterRegistry.find("http.server.requests")
                 .tag("uri", "/probe/ok").tag("status", "200").timer();
         Timer errorTimer = meterRegistry.find("http.server.requests")
@@ -82,6 +87,7 @@ class HttpObservabilityIntegrationTest {
         var timeoutCounter = meterRegistry.find("carelog.http.timeouts").tag("kind", "deadline").counter();
         assertThat(timeoutCounter).isNotNull();
         assertThat(timeoutCounter.count()).isEqualTo(1.0);
+        assertThat(meterRegistry.find("carelog.http.timeouts").tag("kind", "dependency").counter()).isNull();
         assertThat(timeoutCounter.getId().getTags()).extracting("value")
                 .doesNotContain("test-only timeout detail");
 
@@ -91,6 +97,8 @@ class HttpObservabilityIntegrationTest {
                 .contains("status=\"500\"")
                 .contains("carelog_http_timeouts_total")
                 .contains("kind=\"deadline\"")
+                .contains("status=\"503\"")
+                .doesNotContain("kind=\"dependency\"")
                 .doesNotContain("test-only timeout detail");
     }
 
@@ -137,6 +145,13 @@ class HttpObservabilityIntegrationTest {
         @GetMapping("/probe/timeout")
         String timeout() throws TimeoutException {
             throw new TimeoutException("test-only timeout detail");
+        }
+
+        @GetMapping("/probe/dependency-unavailable")
+        String dependencyUnavailable() {
+            throw new OAuthStateStoreUnavailableException(
+                    "OAuth state store is unavailable",
+                    new RedisConnectionFailureException("Valkey connection refused"));
         }
     }
 }

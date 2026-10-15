@@ -13,6 +13,7 @@ import java.lang.reflect.Proxy;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Duration;
@@ -68,6 +69,9 @@ final class JdbcMetricsDataSource extends DelegatingDataSource
 
     private Connection instrument(Connection connection) {
         InvocationHandler handler = (proxy, method, arguments) -> {
+            if (isObjectMethod(method)) return objectMethod(proxy, method, arguments, "JdbcMetricsConnectionProxy");
+            if (isWrapperMethod(method)) return wrapperMethod(proxy, connection, method, arguments);
+
             Object result = invoke(connection, method, arguments);
             String preparedOperation = "other";
             if ("prepareCall".equals(method.getName())) {
@@ -93,15 +97,19 @@ final class JdbcMetricsDataSource extends DelegatingDataSource
     private Statement instrumentStatement(Statement statement, Connection connection, String preparedOperation) {
         InvocationHandler handler = (proxy, method, arguments) -> {
             String methodName = method.getName();
+            if (isObjectMethod(method)) return objectMethod(proxy, method, arguments, "JdbcMetricsStatementProxy");
+            if (isWrapperMethod(method)) return wrapperMethod(proxy, statement, method, arguments);
             if ("getConnection".equals(methodName)) return connection;
 
             String operation = operationFor(methodName, arguments, preparedOperation);
-            if (!isExecutionMethod(methodName)) return invoke(statement, method, arguments);
+            if (!isExecutionMethod(methodName)) {
+                return wrapResultSet(invoke(statement, method, arguments), (Statement) proxy);
+            }
 
             long startedAt = System.nanoTime();
             Throwable failure = null;
             try {
-                return invoke(statement, method, arguments);
+                return wrapResultSet(invoke(statement, method, arguments), (Statement) proxy);
             } catch (Throwable throwable) {
                 failure = throwable;
                 throw throwable;
@@ -114,6 +122,58 @@ final class JdbcMetricsDataSource extends DelegatingDataSource
                 ? CallableStatement.class
                 : statement instanceof PreparedStatement ? PreparedStatement.class : Statement.class;
         return (Statement) proxy(statementType, statement, handler);
+    }
+
+    private static Object wrapResultSet(Object result, Statement statement) {
+        if (!(result instanceof ResultSet resultSet)) return result;
+
+        InvocationHandler handler = (proxy, method, arguments) -> {
+            if (isObjectMethod(method)) return objectMethod(proxy, method, arguments, "JdbcMetricsResultSetProxy");
+            if (isWrapperMethod(method)) return wrapperMethod(proxy, resultSet, method, arguments);
+            if ("getStatement".equals(method.getName()) && method.getParameterCount() == 0) {
+                Object relatedStatement = invoke(resultSet, method, arguments);
+                return relatedStatement == null ? null : statement;
+            }
+            return invoke(resultSet, method, arguments);
+        };
+        return proxy(ResultSet.class, resultSet, handler);
+    }
+
+    private static boolean isObjectMethod(Method method) {
+        return method.getDeclaringClass() == Object.class
+                || (method.getParameterCount() == 1 && "equals".equals(method.getName())
+                && method.getParameterTypes()[0] == Object.class)
+                || (method.getParameterCount() == 0
+                && ("hashCode".equals(method.getName()) || "toString".equals(method.getName())));
+    }
+
+    private static Object objectMethod(Object proxy, Method method, Object[] arguments, String proxyName) {
+        return switch (method.getName()) {
+            case "equals" -> arguments != null && arguments.length == 1 && proxy == arguments[0];
+            case "hashCode" -> System.identityHashCode(proxy);
+            case "toString" -> proxyName + "@" + Integer.toHexString(System.identityHashCode(proxy));
+            default -> throw new IllegalArgumentException("Unsupported Object method: " + method.getName());
+        };
+    }
+
+    private static boolean isWrapperMethod(Method method) {
+        return method.getDeclaringClass() == java.sql.Wrapper.class
+                || "unwrap".equals(method.getName()) || "isWrapperFor".equals(method.getName());
+    }
+
+    private static Object wrapperMethod(Object proxy, Object delegate, Method method, Object[] arguments)
+            throws Throwable {
+        Class<?> requestedType = arguments != null && arguments.length == 1
+                ? (arguments[0] instanceof Class<?> type ? type : null)
+                : null;
+        if ("unwrap".equals(method.getName()) && requestedType != null && requestedType.isInstance(proxy)) {
+            return proxy;
+        }
+        if ("isWrapperFor".equals(method.getName()) && requestedType != null
+                && requestedType.isInstance(proxy)) {
+            return true;
+        }
+        return invoke(delegate, method, arguments);
     }
 
     private void record(String operation, Throwable failure, long elapsedNanos) {
@@ -198,7 +258,7 @@ final class JdbcMetricsDataSource extends DelegatingDataSource
 
     private static <T> T proxy(Class<T> contract, Object delegate, InvocationHandler handler) {
         return contract.cast(Proxy.newProxyInstance(
-                delegate.getClass().getClassLoader(), new Class<?>[]{contract}, handler));
+                contract.getClassLoader(), new Class<?>[]{contract}, handler));
     }
 
     private record TimerKey(String operation, String outcome) {
