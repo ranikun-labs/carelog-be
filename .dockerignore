@@ -1,0 +1,14 @@
+.git
+.gradle
+**/.gradle
+**/build
+.env*
+**/.env*
+secrets
+**/secrets
+env
+**/env
+*.pem
+*.key
+*.p12
+*.pfx

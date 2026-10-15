@@ -5,14 +5,14 @@ services:
     environment:
       POSTGRES_DB: carelog
       POSTGRES_USER: carelog
-      POSTGRES_PASSWORD: carelog1506
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a local-only POSTGRES_PASSWORD in the ignored .env file}
     ports:
       - "5433:5432"
     volumes:
       - carelog-db-data:/var/lib/postgresql/data
 
   redis:
-    image: redis:7-alpine
+    image: valkey/valkey:8.1.0-alpine@sha256:93df46243b1d033a2d8f3ffc34122c6e431fbb315c5cff246ce6f77cf5a09f5b
     container_name: carelog-redis
     ports:
       - "6379:6379"
