@@ -60,6 +60,13 @@ class OAuthAuthorizationServiceTest {
         assertThat(store.record.codeVerifier()).isNotEqualTo(result.state());
         assertThat(provider.request.codeChallenge()).isNotEqualTo(store.record.codeVerifier());
         assertThat(provider.request.redirectUri()).isEqualTo(store.record.redirectUri());
+        assertThat(store.record.version()).isEqualTo(OAuthStateRecord.CURRENT_VERSION);
+        assertThat(store.record.productClient().clientId()).isEqualTo(
+                OAuthProductClientCompatibilityResolver.DEFAULT_CARELOG_WEB_CLIENT_ID);
+        assertThat(store.record.productClient().product()).isEqualTo(Product.CARELOG);
+        assertThat(store.record.productClient().channel()).isEqualTo(ProductClientChannel.WEB);
+        assertThat(store.record.issuedAt()).isEqualTo(Instant.parse("2026-07-27T00:00:00Z"));
+        assertThat(store.record.expiresAt()).isEqualTo(Instant.parse("2026-07-27T00:05:00Z"));
         assertThat(store.record.nonce()).isNull();
         assertThat(provider.request.nonce()).isNull();
         assertThat(OAuthAuthorizationService.AuthorizationUrlResult.class.getRecordComponents())
@@ -121,6 +128,36 @@ class OAuthAuthorizationServiceTest {
 
         assertThat(provider.request.redirectUri()).isEqualTo(URI.create("carelog://oauth/callback"));
         assertThat(store.record.redirectUri()).isEqualTo(URI.create("carelog://oauth/callback"));
+    }
+
+    @Test
+    void 검증된_returnTo_query_원문을_State에_그대로_저장한다() {
+        CapturingStateStore store = new CapturingStateStore();
+        CapturingProvider provider = new CapturingProvider(false);
+        MockEnvironment environment = new MockEnvironment()
+                .withProperty("oauth.redirect-uris.neutral.WEB", "https://app.example.com/callback");
+        String returnTo = "/customers?tab=notes";
+
+        service(provider, store, environment).startAuthorization(
+                new OAuthAuthorizationCommand("neutral", ClientChannel.WEB, returnTo)
+        );
+
+        assertThat(store.record.returnTo()).isEqualTo(returnTo);
+    }
+
+    @Test
+    void 잘못된_returnTo는_State_저장과_Provider_authorization_URL_생성_전에_거부한다() {
+        CapturingStateStore store = new CapturingStateStore();
+        CapturingProvider provider = new CapturingProvider(false);
+        MockEnvironment environment = new MockEnvironment()
+                .withProperty("oauth.redirect-uris.neutral.WEB", "https://app.example.com/callback");
+
+        assertThatThrownBy(() -> service(provider, store, environment).startAuthorization(
+                new OAuthAuthorizationCommand("neutral", ClientChannel.WEB, "https://evil.example")
+        )).isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("exceptionStatus", ExceptionStatus.INVALID_OAUTH_RETURN_TO);
+        assertThat(store.record).isNull();
+        assertThat(provider.request).isNull();
     }
 
     private OAuthAuthorizationService service(

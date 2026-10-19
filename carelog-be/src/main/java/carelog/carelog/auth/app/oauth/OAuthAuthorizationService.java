@@ -2,6 +2,7 @@ package carelog.carelog.auth.app.oauth;
 
 import carelog.carelog.auth.app.port.oauth.OAuthAuthorizationCommand;
 import carelog.carelog.auth.app.port.oauth.OAuthAuthorizationRequest;
+import carelog.carelog.auth.app.port.oauth.OAuthBoundProductClient;
 import carelog.carelog.auth.app.port.oauth.OAuthProviderPort;
 import carelog.carelog.auth.app.port.oauth.OAuthStateRecord;
 import carelog.carelog.auth.app.port.oauth.OAuthStateStore;
@@ -44,16 +45,21 @@ public class OAuthAuthorizationService {
         String state = generateState();
         PkceChallenge pkce = provider.supportsPkce() ? PkceChallenge.generate() : null;
         String nonce = provider.requiresNonce() ? generateRandomValue() : null;
+        Duration ttl = stateTtl();
+        Instant issuedAt = Instant.now(clock);
 
         OAuthStateRecord record = new OAuthStateRecord(
+                OAuthStateRecord.CURRENT_VERSION,
                 providerCode,
                 redirectUri,
+                new OAuthBoundProductClient(client.clientId(), client.product(), client.channel()),
                 returnTo,
                 pkce != null ? pkce.codeVerifier() : null,
                 nonce,
-                Instant.now(clock)
+                issuedAt,
+                issuedAt.plus(ttl)
         );
-        stateStore.save(state, record, stateTtl());
+        stateStore.save(state, record, ttl);
 
         URI authorizationUrl = provider.buildAuthorizationUrl(new OAuthAuthorizationRequest(
                 providerCode,

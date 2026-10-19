@@ -1,9 +1,12 @@
 package carelog.carelog.auth.app.adapter.oauth.kakao;
 
 import carelog.carelog.auth.app.port.oauth.OAuthLoginResult;
+import carelog.carelog.auth.app.port.oauth.OAuthBoundProductClient;
 import carelog.carelog.auth.app.port.oauth.OAuthProviderException;
 import carelog.carelog.auth.app.port.oauth.OAuthStateRecord;
 import carelog.carelog.auth.app.port.oauth.OAuthTokenGrant;
+import carelog.carelog.auth.domain.Product;
+import carelog.carelog.auth.domain.ProductClientChannel;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
@@ -131,7 +134,19 @@ class KakaoOAuthApiClientHttpTest {
         properties.setAuthorizationUri(server.url("/authorize").toString()); properties.setTokenUri(server.url("/token").toString()); properties.setUserInfoUri(server.url("/user").toString());
         return new KakaoOAuthProviderAdapter(client, properties, Clock.systemUTC());
     }
-    private OAuthStateRecord state() { return new OAuthStateRecord("kakao", URI.create("https://app.example/callback"), "/", null, null, Instant.EPOCH); }
+    private OAuthStateRecord state() {
+        return new OAuthStateRecord(
+                OAuthStateRecord.CURRENT_VERSION,
+                "kakao",
+                URI.create("https://app.example/callback"),
+                new OAuthBoundProductClient("carelog-web", Product.CARELOG, ProductClientChannel.WEB),
+                "/",
+                null,
+                null,
+                Instant.EPOCH,
+                Instant.EPOCH.plusSeconds(300)
+        );
+    }
     private KakaoOAuthApiClient client(String clientSecret) {
         KakaoOAuthProperties properties = new KakaoOAuthProperties();
         properties.setClientId("client"); properties.setClientSecret(clientSecret);

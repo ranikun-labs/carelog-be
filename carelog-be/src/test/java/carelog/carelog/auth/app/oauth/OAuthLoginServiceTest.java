@@ -7,6 +7,7 @@ import carelog.carelog.auth.app.port.CRMIdentityProjectionPort;
 import carelog.carelog.auth.app.port.oauth.ExternalIdentityLookupPort;
 import carelog.carelog.auth.app.port.oauth.LinkedAccountStatus;
 import carelog.carelog.auth.app.port.oauth.LinkedAccountView;
+import carelog.carelog.auth.app.port.oauth.OAuthBoundProductClient;
 import carelog.carelog.auth.app.port.oauth.OAuthCallbackCommand;
 import carelog.carelog.auth.app.port.oauth.OAuthLoginResult;
 import carelog.carelog.auth.app.port.oauth.OAuthPrincipal;
@@ -16,6 +17,8 @@ import carelog.carelog.auth.app.port.oauth.OAuthStateRecord;
 import carelog.carelog.auth.app.port.oauth.OAuthStateStore;
 import carelog.carelog.auth.app.port.oauth.OAuthStateStoreUnavailableException;
 import carelog.carelog.auth.app.port.oauth.OAuthTokenGrant;
+import carelog.carelog.auth.domain.Product;
+import carelog.carelog.auth.domain.ProductClientChannel;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,8 +41,10 @@ class OAuthLoginServiceTest {
 
     private static final UUID ACCOUNT_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
     private static final URI REDIRECT_URI = URI.create("https://app.example.com/oauth/callback");
+    private static final String STATE = "A".repeat(43);
 
     @Mock private OAuthStateStore stateStore;
+    @Mock private OAuthStateBindingVerifier stateBindingVerifier;
     @Mock private ExternalIdentityLookupPort externalIdentityLookupPort;
     @Mock private CRMIdentityProjectionPort crmIdentityProjectionPort;
     @Mock private AuthTokenIssuanceService authTokenIssuanceService;
@@ -53,6 +58,7 @@ class OAuthLoginServiceTest {
         service = new OAuthLoginService(
                 new OAuthProviderRegistry(List.of(provider)),
                 stateStore,
+                stateBindingVerifier,
                 externalIdentityLookupPort,
                 crmIdentityProjectionPort,
                 authTokenIssuanceService
@@ -61,26 +67,80 @@ class OAuthLoginServiceTest {
 
     @Test
     void state가_없으면_인증실패_결과를_반환한다() {
-        when(stateStore.consume("state")).thenReturn(Optional.empty());
+        when(stateStore.consume(STATE)).thenReturn(Optional.empty());
 
         assertThat(service.completeLogin(command())).isInstanceOf(OAuthLoginResult.InvalidOrExpiredState.class);
         verifyNoInteractions(externalIdentityLookupPort, crmIdentityProjectionPort, authTokenIssuanceService);
     }
 
     @Test
+    void malformed_public_state는_Redis와_provider_exchange_전에_거부한다() {
+        List<String> malformedStates = List.of(
+                "abc",
+                "A".repeat(42),
+                "A".repeat(44),
+                "A".repeat(42) + "=",
+                "A".repeat(21) + "!" + "A".repeat(21),
+                "A".repeat(21) + " " + "A".repeat(21),
+                "550e8400-e29b-41d4-a716-446655440000"
+        );
+
+        for (String malformedState : malformedStates) {
+            assertThat(service.completeLogin(new OAuthCallbackCommand(
+                    "neutral", "authorization-code", malformedState)))
+                    .isInstanceOf(OAuthLoginResult.InvalidOrExpiredState.class);
+        }
+
+        verify(stateStore, never()).consume(anyString());
+        verify(provider, never()).exchangeCode(anyString(), any(), anyString());
+        verifyNoInteractions(stateBindingVerifier, externalIdentityLookupPort,
+                crmIdentityProjectionPort, authTokenIssuanceService);
+    }
+
+    @Test
     void 요청_provider와_state_provider가_다르면_인증실패_결과를_반환한다() {
-        when(stateStore.consume("state")).thenReturn(Optional.of(new OAuthStateRecord(
-                "different", REDIRECT_URI, "/journals/42", "server-only-verifier", null,
-                Instant.parse("2026-07-27T00:00:00Z")
+        when(stateStore.consume(STATE)).thenReturn(Optional.of(new OAuthStateRecord(
+                OAuthStateRecord.CURRENT_VERSION,
+                "different",
+                REDIRECT_URI,
+                productClient(),
+                "/journals/42",
+                "server-only-verifier",
+                null,
+                Instant.parse("2026-07-27T00:00:00Z"),
+                Instant.parse("2026-07-27T00:05:00Z")
         )));
+        when(stateBindingVerifier.verify(eq("neutral"), any(OAuthStateRecord.class))).thenReturn(false);
 
         assertThat(service.completeLogin(command())).isInstanceOf(OAuthLoginResult.InvalidOrExpiredState.class);
+        verify(provider, never()).exchangeCode(anyString(), any(), anyString());
+        verifyNoInteractions(externalIdentityLookupPort, crmIdentityProjectionPort, authTokenIssuanceService);
+    }
+
+    @Test
+    void legacy_or_invalid_stored_state는_provider_exchange_전에_거부한다() {
+        OAuthStateRecord legacyState = new OAuthStateRecord(
+                0,
+                "neutral",
+                REDIRECT_URI,
+                null,
+                "/journals/42",
+                "server-only-verifier",
+                null,
+                Instant.parse("2026-07-27T00:00:00Z"),
+                null
+        );
+        when(stateStore.consume(STATE)).thenReturn(Optional.of(legacyState));
+        when(stateBindingVerifier.verify("neutral", legacyState)).thenReturn(false);
+
+        assertThat(service.completeLogin(command())).isInstanceOf(OAuthLoginResult.InvalidOrExpiredState.class);
+        verify(provider, never()).exchangeCode(anyString(), any(), anyString());
         verifyNoInteractions(externalIdentityLookupPort, crmIdentityProjectionPort, authTokenIssuanceService);
     }
 
     @Test
     void state_store_장애는_인증실패로_흡수하지_않고_전파한다() {
-        when(stateStore.consume("state"))
+        when(stateStore.consume(STATE))
                 .thenThrow(new OAuthStateStoreUnavailableException("redis unavailable", new RuntimeException()));
 
         assertThatThrownBy(() -> service.completeLogin(command()))
@@ -147,7 +207,8 @@ class OAuthLoginServiceTest {
 
     @Test
     void provider_전용_인증실패만_명시적_결과로_변환한다() {
-        when(stateStore.consume("state")).thenReturn(Optional.of(state()));
+        when(stateBindingVerifier.verify(anyString(), any())).thenReturn(true);
+        when(stateStore.consume(STATE)).thenReturn(Optional.of(state()));
         when(provider.exchangeCode(anyString(), any(), anyString()))
                 .thenThrow(new OAuthProviderException(OAuthLoginResult.FailureReason.CODE_EXCHANGE_FAILED));
 
@@ -158,7 +219,8 @@ class OAuthLoginServiceTest {
 
     @Test
     void providerSubject가_없거나_blank이면_검증실패_결과를_반환한다() {
-        when(stateStore.consume("state")).thenReturn(Optional.of(state()));
+        when(stateBindingVerifier.verify(anyString(), any())).thenReturn(true);
+        when(stateStore.consume(STATE)).thenReturn(Optional.of(state()));
         OAuthTokenGrant grant = new OAuthTokenGrant("provider-token", null, Instant.parse("2026-07-27T01:00:00Z"));
         when(provider.exchangeCode("authorization-code", REDIRECT_URI, "server-only-verifier")).thenReturn(grant);
         when(provider.fetchPrincipal(grant, state())).thenReturn(new OAuthPrincipal(
@@ -240,7 +302,8 @@ class OAuthLoginServiceTest {
     }
 
     private void setVerifiedPrincipal() {
-        when(stateStore.consume("state")).thenReturn(Optional.of(state()));
+        when(stateBindingVerifier.verify(anyString(), any())).thenReturn(true);
+        when(stateStore.consume(STATE)).thenReturn(Optional.of(state()));
         OAuthTokenGrant grant = new OAuthTokenGrant("provider-token", null, Instant.parse("2026-07-27T01:00:00Z"));
         when(provider.exchangeCode("authorization-code", REDIRECT_URI, "server-only-verifier")).thenReturn(grant);
         when(provider.fetchPrincipal(grant, state())).thenReturn(new OAuthPrincipal(
@@ -248,13 +311,24 @@ class OAuthLoginServiceTest {
     }
 
     private OAuthCallbackCommand command() {
-        return new OAuthCallbackCommand("neutral", "authorization-code", "state");
+        return new OAuthCallbackCommand("neutral", "authorization-code", STATE);
     }
 
     private OAuthStateRecord state() {
         return new OAuthStateRecord(
-                "neutral", REDIRECT_URI, "/journals/42", "server-only-verifier", null,
-                Instant.parse("2026-07-27T00:00:00Z")
+                OAuthStateRecord.CURRENT_VERSION,
+                "neutral",
+                REDIRECT_URI,
+                productClient(),
+                "/journals/42",
+                "server-only-verifier",
+                null,
+                Instant.parse("2026-07-27T00:00:00Z"),
+                Instant.parse("2026-07-27T00:05:00Z")
         );
+    }
+
+    private OAuthBoundProductClient productClient() {
+        return new OAuthBoundProductClient("carelog-web", Product.CARELOG, ProductClientChannel.WEB);
     }
 }

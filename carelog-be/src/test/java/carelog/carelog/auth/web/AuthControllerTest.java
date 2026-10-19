@@ -33,6 +33,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -113,6 +114,48 @@ class AuthControllerTest {
         assertThat(commandCaptor.getValue()).isEqualTo(
                 new OAuthAuthorizationCommand("kakao", ClientChannel.MOBILE, "/journals/42")
         );
+    }
+
+    @DisplayName("Kakao authorization 요청에서 returnTo가 누락되면 400으로 거부한다")
+    @Test
+    void startKakaoAuthorization_missingReturnTo_returnsBadRequest() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/oauth/kakao/authorization")
+                        .contextPath("/api/v1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"clientChannel":"WEB"}
+                                """))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(authorizationService);
+    }
+
+    @DisplayName("Kakao authorization 요청에서 returnTo가 null이면 400으로 거부한다")
+    @Test
+    void startKakaoAuthorization_nullReturnTo_returnsBadRequest() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/oauth/kakao/authorization")
+                        .contextPath("/api/v1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"clientChannel":"WEB","returnTo":null}
+                                """))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(authorizationService);
+    }
+
+    @DisplayName("Kakao authorization 요청에서 returnTo가 blank이면 400으로 거부한다")
+    @Test
+    void startKakaoAuthorization_blankReturnTo_returnsBadRequest() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/oauth/kakao/authorization")
+                        .contextPath("/api/v1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"clientChannel":"WEB","returnTo":" "}
+                                """))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(authorizationService);
     }
 
     @DisplayName("연결된 Kakao 계정은 Carelog accessToken과 refreshToken만 반환한다")
