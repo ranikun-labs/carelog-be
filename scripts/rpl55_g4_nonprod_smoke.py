@@ -13,7 +13,7 @@ import sys
 from dataclasses import dataclass
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
-from urllib.request import HTTPRedirectHandler, Request, build_opener
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 CUSTOMERS = "/api/v1/users/customers"
 INTERNAL = "/api/v1/internal/identity/claims/00000000-0000-0000-0000-000000000000"
@@ -56,7 +56,8 @@ class _NoRedirect(HTTPRedirectHandler):
         return None
 
 
-_NO_REDIRECT_OPENER = build_opener(_NoRedirect())
+# Ignore HTTP_PROXY/HTTPS_PROXY for synthetic loopback-only test credentials.
+_NO_REDIRECT_OPENER = build_opener(ProxyHandler({}), _NoRedirect())
 
 
 def get(base: str, path: str, bearer: str | None = None,
