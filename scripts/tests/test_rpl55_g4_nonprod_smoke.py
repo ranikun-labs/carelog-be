@@ -140,6 +140,28 @@ class NonprodSmokeTests(unittest.TestCase):
         self.assertNotIn("synthetic-token", output.getvalue())
 
 
+    def test_unexpected_customer_contract_is_failure_not_blocker(self):
+        original_get = smoke.get
+
+        def corrupt_customer_body(base, path, bearer=None, extra_headers=None):
+            if path == smoke.CUSTOMERS and bearer == "synthetic-token":
+                return smoke.HttpResult(200, b'{"data":"not-an-array"}')
+            return original_get(base, path, bearer, extra_headers)
+
+        with patch.dict(os.environ, {
+            "G4_NONPROD_ACK": "YES_NONPROD_ONLY",
+            "G4_GATEWAY_URL": self.url,
+            "G4_MANAGER_ACCESS_TOKEN": "synthetic-token",
+        }, clear=True), patch.object(smoke, "get", side_effect=corrupt_customer_body):
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                code = smoke.main()
+        self.assertEqual(code, 1)
+        payload = json.loads(output.getvalue())
+        self.assertEqual(payload["verdict"], "FAIL")
+        self.assertNotIn("synthetic-token", output.getvalue())
+        self.assertNotIn("not-an-array", output.getvalue())
+
     def test_failed_unauthenticated_probe_returns_nonzero(self):
         original_get = smoke.get
 
