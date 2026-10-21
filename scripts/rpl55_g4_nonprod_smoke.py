@@ -13,7 +13,7 @@ import sys
 from dataclasses import dataclass
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 CUSTOMERS = "/api/v1/users/customers"
 INTERNAL = "/api/v1/internal/identity/claims/00000000-0000-0000-0000-000000000000"
@@ -49,6 +49,16 @@ def loopback_base(raw: str) -> str:
     return raw.rstrip("/")
 
 
+class _NoRedirect(HTTPRedirectHandler):
+    """Never forward the synthetic bearer or trusted-header probes on 3xx."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_NO_REDIRECT_OPENER = build_opener(_NoRedirect())
+
+
 def get(base: str, path: str, bearer: str | None = None,
         extra_headers: dict[str, str] | None = None) -> HttpResult:
     headers = {"Accept": "application/json"}
@@ -57,7 +67,7 @@ def get(base: str, path: str, bearer: str | None = None,
     headers.update(extra_headers or {})
     request = Request(base + path, headers=headers, method="GET")
     try:
-        with urlopen(request, timeout=8) as response:
+        with _NO_REDIRECT_OPENER.open(request, timeout=8) as response:
             return HttpResult(response.status, response.read(1024 * 1024))
     except HTTPError as error:
         with error:
