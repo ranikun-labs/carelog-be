@@ -105,5 +105,38 @@ class NonprodSmokeTests(unittest.TestCase):
         self.assertNotIn("synthetic-token", output.getvalue())
 
 
+    def test_failed_unauthenticated_probe_returns_nonzero(self):
+        original_get = smoke.get
+
+        def broken_missing_auth(base, path, bearer=None, extra_headers=None):
+            if path == smoke.CUSTOMERS and bearer is None:
+                return smoke.HttpResult(200, b'{"data":[]}')
+            return original_get(base, path, bearer, extra_headers)
+
+        with patch.dict(os.environ, {
+            "G4_NONPROD_ACK": "YES_NONPROD_ONLY",
+            "G4_GATEWAY_URL": self.url,
+            "G4_MANAGER_ACCESS_TOKEN": "synthetic-token",
+        }, clear=True), patch.object(smoke, "get", side_effect=broken_missing_auth):
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                code = smoke.main()
+        self.assertEqual(code, 1)
+        payload = json.loads(output.getvalue())
+        self.assertEqual(payload["verdict"], "FAIL")
+        self.assertNotIn("synthetic-token", output.getvalue())
+
+    def test_missing_nonprod_ack_returns_blocked(self):
+        with patch.dict(os.environ, {
+            "G4_GATEWAY_URL": self.url,
+            "G4_MANAGER_ACCESS_TOKEN": "synthetic-token",
+        }, clear=True):
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                code = smoke.main()
+        self.assertEqual(code, 2)
+        self.assertEqual(json.loads(output.getvalue())["verdict"], "BLOCKED")
+
+
 if __name__ == "__main__":
     unittest.main()
