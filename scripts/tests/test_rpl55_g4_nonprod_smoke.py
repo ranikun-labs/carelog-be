@@ -140,6 +140,76 @@ class NonprodSmokeTests(unittest.TestCase):
         self.assertNotIn("synthetic-token", output.getvalue())
 
 
+    def test_foreign_customer_must_be_visible_to_owning_user_first(self):
+        from uuid import UUID
+
+        foreign_id = str(UUID("33333333-3333-4333-8333-333333333333"))
+        foreign_path = smoke.CUSTOMERS + "/" + foreign_id
+        original_get = smoke.get
+
+        def owned_customer(base, path, bearer=None, extra_headers=None):
+            if path == foreign_path:
+                if bearer == "owner-b-synthetic":
+                    return smoke.HttpResult(
+                        200, ('{"data":{"publicId":"' + foreign_id + '"}}').encode()
+                    )
+                if bearer == "synthetic-token":
+                    return smoke.HttpResult(404, b"")
+            return original_get(base, path, bearer, extra_headers)
+
+        with patch.dict(os.environ, {
+            "G4_NONPROD_ACK": "YES_NONPROD_ONLY",
+            "G4_GATEWAY_URL": self.url,
+            "G4_MANAGER_ACCESS_TOKEN": "synthetic-token",
+            "G4_FOREIGN_OWNER_ACCESS_TOKEN": "owner-b-synthetic",
+            "G4_FOREIGN_CUSTOMER_PUBLIC_ID": foreign_id,
+        }, clear=True), patch.object(smoke, "get", side_effect=owned_customer):
+            cases = {item["case"]: item["status"] for item in smoke.run()}
+        self.assertEqual(cases["G4-05-owner-fixture-http"], "PASS")
+        self.assertEqual(cases["G4-05-owner-fixture-id"], "PASS")
+        self.assertEqual(cases["G4-05-cross-organization-conceal"], "PASS")
+
+    def test_random_nonexistent_foreign_customer_cannot_pass_isolation(self):
+        foreign_id = "33333333-3333-4333-8333-333333333333"
+        foreign_path = smoke.CUSTOMERS + "/" + foreign_id
+        original_get = smoke.get
+
+        def absent_fixture(base, path, bearer=None, extra_headers=None):
+            if path == foreign_path:
+                return smoke.HttpResult(404, b"")
+            return original_get(base, path, bearer, extra_headers)
+
+        with patch.dict(os.environ, {
+            "G4_NONPROD_ACK": "YES_NONPROD_ONLY",
+            "G4_GATEWAY_URL": self.url,
+            "G4_MANAGER_ACCESS_TOKEN": "synthetic-token",
+            "G4_FOREIGN_OWNER_ACCESS_TOKEN": "owner-b-synthetic",
+            "G4_FOREIGN_CUSTOMER_PUBLIC_ID": foreign_id,
+        }, clear=True), patch.object(smoke, "get", side_effect=absent_fixture):
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                code = smoke.main()
+        self.assertEqual(code, 1)
+        statuses = {item["case"]: item["status"] for item in json.loads(output.getvalue())["checks"]}
+        self.assertEqual(statuses["G4-05-owner-fixture-http"], "FAIL")
+        self.assertEqual(statuses["G4-05-cross-organization-conceal"], "NOT_RUN")
+        self.assertNotIn("owner-b-synthetic", output.getvalue())
+
+    def test_foreign_fixture_requires_two_distinct_synthetic_owners(self):
+        env = {
+            "G4_NONPROD_ACK": "YES_NONPROD_ONLY",
+            "G4_GATEWAY_URL": self.url,
+            "G4_MANAGER_ACCESS_TOKEN": "synthetic-token",
+            "G4_FOREIGN_CUSTOMER_PUBLIC_ID": "33333333-3333-4333-8333-333333333333",
+        }
+        with patch.dict(os.environ, env, clear=True):
+            with self.assertRaises(ValueError):
+                smoke.run()
+        env["G4_FOREIGN_OWNER_ACCESS_TOKEN"] = "synthetic-token"
+        with patch.dict(os.environ, env, clear=True):
+            with self.assertRaises(ValueError):
+                smoke.run()
+
     def test_unexpected_customer_contract_is_failure_not_blocker(self):
         original_get = smoke.get
 
