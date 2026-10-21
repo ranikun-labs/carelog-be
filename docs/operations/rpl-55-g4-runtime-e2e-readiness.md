@@ -16,6 +16,8 @@
 
 **중복 금지:** 이미 수행된 MockMvc Controller 테스트와 Gateway의 fake-upstream routing 테스트를 복제하지 않는다. `#52`는 Customer Controller 부정 테스트만 추가한다.
 
+실제 `CustomerProductApiIntegrationTest.customerLifecycle_isOrganizationScopedAndMutationBounded`에도 조직 A/B Customer를 시드해 B가 A의 Customer ID를 조회·수정하면 404이고 A 데이터가 불변임을 확인하는 **기존 테스트 소스**가 있다. 따라서 이를 다시 만들지 않는다. 단, 소스 존재는 이번 PR의 실행 PASS도 아니고 실제 Gateway→Carelog 프로세스 E2E도 아니다.
+
 ## 2. 다음 최소 실행 Slice — 비운영 Runtime E2E
 
 **실행 조건:** 독립 worktree 및 테스트 전용 환경. Gateway·Core Identity·Carelog Backend는 **실제 애플리케이션 프로세스**여야 한다. 인증 토큰·서비스 시크릿·DB 자격 증명은 로그/문서에 저장하지 않는다. 실서비스 DNS/DB/계정/클라우드 전환 금지.
