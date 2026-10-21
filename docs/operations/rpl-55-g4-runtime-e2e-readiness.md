@@ -80,3 +80,17 @@ unset G4_MANAGER_ACCESS_TOKEN
 - 본 스크립트에 연동된 고정 Stub 서버의 Python 자체 테스트는 **검사기 동작 검증**일 뿐 실제 Product E2E가 아니다.
 - 로그에 사용자 토큰, 응답 본문 및 시크릿을 출력하지 않는다. 환경변수는 스모크 완료 후 정리한다.
 - **실행 상태: NOT_RUN.** 이번 PR에는 비운영 환경과 테스트용 JWT가 없으므로 어떠한 PASS도 새로 주장하지 않는다.
+
+## 6. 검사기 자체 테스트 실행 증거 (2026-10-22)
+
+위 5절 작성 당시의 `NOT_RUN`은 이후 **검사기 자체 테스트에 한해** 아래처럼 갱신됐다.
+
+- 실행 환경: ChatGPT 격리 Python 3.13.5 (실제 Gateway·Identity·Carelog 프로세스 없음)
+- 실행 명령: `python3 -m compileall -q scripts`, `python3 -m unittest discover -s scripts/tests -p 'test_rpl55_g4_*.py' -v`
+- 실행 결과: **8 tests / 8 PASS / 0 FAIL / 0 SKIP**, `Ran 8 tests in 0.525s; OK`.
+- 실행한 두 로컬 파일의 Git Blob SHA를 원격과 대조해 동일 소스임을 확인:
+  - `scripts/rpl55_g4_nonprod_smoke.py`: `50abe14ae98404d9627bfef546ff3365a2cef904`
+  - `scripts/tests/test_rpl55_g4_nonprod_smoke.py`: `ebc43d44ca7bc24d072375d2e2155ec6e254de63`
+- 보안 보완: HTTP 3xx가 외부/다른 Origin으로 리다이렉트하는 것을 자동 추적하지 않도록 `_NoRedirect`를 설치하고, 302를 따라가지 않는 회귀 테스트 추가.
+
+**증거 범위:** 로컬 stub 기반 검사기 자체 테스트만 통과. 실제 Gateway→Carelog 스모크 **NOT_RUN**, 3-서비스 E2E **NOT_RUN**, G4 Cutover **HOLD**, Source Merge 승인/운영 배포 **없음**.
