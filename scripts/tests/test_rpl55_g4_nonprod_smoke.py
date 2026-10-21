@@ -18,6 +18,11 @@ import rpl55_g4_nonprod_smoke as smoke
 
 class StubHandler(BaseHTTPRequestHandler):
     def do_GET(self):
+        if self.path == "/unsafe-redirect":
+            self.send_response(302)
+            self.send_header("Location", "http://127.0.0.1:9/should-never-follow")
+            self.end_headers()
+            return
         if self.path.startswith("/api/v1/internal/"):
             status, body = 403, b""
         elif self.path.startswith("/api/v1/users/customers"):
@@ -60,6 +65,15 @@ class NonprodSmokeTests(unittest.TestCase):
         ):
             with self.subTest(url=url), self.assertRaises(ValueError):
                 smoke.loopback_base(url)
+
+    def test_local_redirect_is_not_followed_with_bearer(self):
+        # A local 302 to another endpoint must not forward any synthetic
+        # token or attempt to connect to an attacker-controlled endpoint.
+        response = smoke.get(
+            self.url, "/unsafe-redirect", bearer="synthetic-token",
+            extra_headers=smoke.SPOOFED,
+        )
+        self.assertEqual(response.status, 302)
 
     def test_requires_explicit_nonprod_ack(self):
         with patch.dict(os.environ, {"G4_GATEWAY_URL": self.url,
