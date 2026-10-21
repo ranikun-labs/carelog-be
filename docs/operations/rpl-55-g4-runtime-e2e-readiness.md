@@ -94,3 +94,14 @@ unset G4_MANAGER_ACCESS_TOKEN
 - 보안 보완: HTTP 3xx가 외부/다른 Origin으로 리다이렉트하는 것을 자동 추적하지 않도록 `_NoRedirect`를 설치하고, 302를 따라가지 않는 회귀 테스트 추가.
 
 **증거 범위:** 로컬 stub 기반 검사기 자체 테스트만 통과. 실제 Gateway→Carelog 스모크 **NOT_RUN**, 3-서비스 E2E **NOT_RUN**, G4 Cutover **HOLD**, Source Merge 승인/운영 배포 **없음**.
+
+## 7. 검사기 보안/실패 분류 보완 및 재검증 (2026-10-22)
+
+기존 6절 8 PASS 증거는 이전 SHA의 실행 이력으로 보존한다. 이후 검사기를 추가 개선했다.
+
+- **보안:** `ProxyHandler({})`로 환경 `HTTP_PROXY/HTTPS_PROXY` 설정을 무시하여 합성 테스트 Bearer Token의 프록시 유출 경로를 차단한다. 기존 **자동 3xx Redirect 차단**과 별개의 방어다.
+- **결과 판정:** `HTTP 200` 응답의 Customer `data` 배열 계약이 깨졌으면 **FAIL/Exit 1**, Gateway 접근 불가 또는 테스트 필수 환경 누락은 **BLOCKED/Exit 2**로 구분한다. 예상하지 못한 응답 본문과 토큰을 표준 출력하지 않는다.
+- **실행:** Python 3.13.5 / `python3 -m compileall -q scripts` **PASS**, `python3 -m unittest discover -s scripts/tests -p 'test_rpl55_g4_*.py' -v` **10 PASS, 0 FAIL, 0 SKIP**, `Ran 10 tests in 0.536s; OK`.
+- **동일 Git Blob SHA 확인:** `scripts/rpl55_g4_nonprod_smoke.py` = `2528788e7f43b991f1850ec1413790dd0992653b`; `scripts/tests/test_rpl55_g4_nonprod_smoke.py` = `dbf5e3bbbfc23f677bdd9c3b5db7c2c6d3c7d1e0`.
+- **증거 범위:** 로컬 표준 라이브러리 스텁에 대한 검사기 자체 테스트 PASS. 실 Gateway+Identity+Carelog 프로세스 E2E, 운영 인증·Cutover·Rollback은 여전히 NOT_RUN. 추가 Source Merge·Deploy·DB 조작 없음.
+
