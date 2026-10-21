@@ -66,6 +66,26 @@ class NonprodSmokeTests(unittest.TestCase):
             with self.subTest(url=url), self.assertRaises(ValueError):
                 smoke.loopback_base(url)
 
+    def test_no_ambient_proxy_can_capture_loopback_token(self):
+        # A proxy configured in the environment must never see synthetic
+        # test credentials, even if NO_PROXY is empty.
+        from urllib.request import ProxyHandler
+        proxy_handlers = [
+            handler for handler in smoke._NO_REDIRECT_OPENER.handlers
+            if isinstance(handler, ProxyHandler)
+        ]
+        self.assertEqual(len(proxy_handlers), 1)
+        self.assertEqual(proxy_handlers[0].proxies, {})
+
+        with patch.dict(os.environ, {
+            "HTTP_PROXY": "http://127.0.0.1:9",
+            "http_proxy": "http://127.0.0.1:9",
+            "NO_PROXY": "",
+            "no_proxy": "",
+        }):
+            result = smoke.get(self.url, smoke.CUSTOMERS, "synthetic-token")
+        self.assertEqual(result.status, 200)
+
     def test_local_redirect_is_not_followed_with_bearer(self):
         # A local 302 to another endpoint must not forward any synthetic
         # token or attempt to connect to an attacker-controlled endpoint.
