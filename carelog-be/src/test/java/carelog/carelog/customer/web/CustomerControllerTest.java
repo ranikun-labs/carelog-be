@@ -118,6 +118,60 @@ class CustomerControllerTest {
         verifyNoInteractions(customerService);
     }
 
+
+    @Test
+    @DisplayName("Gateway Secret이 없으면 Customer API 호출 전에 차단한다")
+    void missingGatewaySecret_cannotReachCustomerService() throws Exception {
+        mockMvc.perform(get("/users/customers")
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .header("X-Organization-Id", UUID.randomUUID().toString())
+                        .header("X-Role", "MANAGER")
+                        .header("X-Public-Id", UUID.randomUUID().toString()))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(customerService);
+    }
+
+    @Test
+    @DisplayName("Gateway Secret이 있어도 조직 식별이 빠지면 Customer API 호출을 거부한다")
+    void missingOrganizationHeader_cannotReachCustomerService() throws Exception {
+        mockMvc.perform(get("/users/customers")
+                        .header("X-Gateway-Secret", GATEWAY_SECRET)
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .header("X-Role", "MANAGER")
+                        .header("X-Public-Id", UUID.randomUUID().toString()))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(customerService);
+    }
+
+    @Test
+    @DisplayName("Gateway 식별자의 UUID가 잘못되면 인증 주체를 구성하지 않는다")
+    void malformedGatewayUserId_cannotReachCustomerService() throws Exception {
+        mockMvc.perform(get("/users/customers")
+                        .header("X-Gateway-Secret", GATEWAY_SECRET)
+                        .header("X-User-Id", "not-a-uuid")
+                        .header("X-Organization-Id", UUID.randomUUID().toString())
+                        .header("X-Role", "MANAGER")
+                        .header("X-Public-Id", UUID.randomUUID().toString()))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(customerService);
+    }
+
+    @Test
+    @DisplayName("검증된 Gateway Secret만 있고 사용자 식별이 없으면 인증이 성립하지 않는다")
+    void missingUserHeader_doesNotAuthenticateCustomerRequest() throws Exception {
+        mockMvc.perform(get("/users/customers")
+                        .header("X-Gateway-Secret", GATEWAY_SECRET)
+                        .header("X-Organization-Id", UUID.randomUUID().toString())
+                        .header("X-Role", "MANAGER")
+                        .header("X-Public-Id", UUID.randomUUID().toString()))
+                .andExpect(status().isUnauthorized());
+
+        verifyNoInteractions(customerService);
+    }
+
     private MockHttpServletRequestBuilder withManager(
             MockHttpServletRequestBuilder request, UUID organizationId) {
         return withRole(request, organizationId, "MANAGER");
