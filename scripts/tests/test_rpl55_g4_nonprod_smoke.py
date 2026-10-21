@@ -74,8 +74,9 @@ class NonprodSmokeTests(unittest.TestCase):
             handler for handler in smoke._NO_REDIRECT_OPENER.handlers
             if isinstance(handler, ProxyHandler)
         ]
-        self.assertEqual(len(proxy_handlers), 1)
-        self.assertEqual(proxy_handlers[0].proxies, {})
+        # build_opener omits an empty ProxyHandler after using it to
+        # suppress environment-derived default proxy setup.
+        self.assertEqual(proxy_handlers, [])
 
         with patch.dict(os.environ, {
             "HTTP_PROXY": "http://127.0.0.1:9",
