@@ -150,15 +150,44 @@ def run() -> list[dict[str, str]]:
            "bearer does not authorize an internal-only path")
 
     foreign_id = os.getenv("G4_FOREIGN_CUSTOMER_PUBLIC_ID", "")
+    foreign_owner_token = os.getenv("G4_FOREIGN_OWNER_ACCESS_TOKEN", "")
+    if bool(foreign_id) != bool(foreign_owner_token):
+        raise ValueError("G4-05 requires both foreign Customer ID and foreign owner's synthetic token")
     if foreign_id:
-        # This optional synthetic fixture must exist in another organization.
-        import uuid
-        foreign = str(uuid.UUID(foreign_id))
-        expect("G4-05-foreign-owner", get(base, CUSTOMERS + "/" + foreign, token),
-               404, "requires seeded other-organization Customer")
+        # A random nonexistent UUID returning 404 is NOT proof of tenant isolation.
+        # First prove the same customer exists and is visible to its owning user.
+        from uuid import UUID
+        foreign = str(UUID(foreign_id))
+        if foreign_owner_token == token or "\r" in foreign_owner_token or "\n" in foreign_owner_token:
+            raise ValueError("G4-05 requires a distinct valid synthetic foreign-owner token")
+        path = CUSTOMERS + "/" + foreign
+        owner_result = get(base, path, foreign_owner_token)
+        expect("G4-05-owner-fixture-http", owner_result, 200,
+               "foreign customer is accessible to its owning organization's test user")
+        if owner_result.status == 200:
+            try:
+                payload = json.loads(owner_result.body)
+                customer = payload["data"]
+                valid_owner_fixture = (
+                    isinstance(customer, dict) and customer.get("publicId") == foreign
+                )
+            except (ValueError, TypeError, KeyError):
+                valid_owner_fixture = False
+            records.append({
+                "case": "G4-05-owner-fixture-id",
+                "status": "PASS" if valid_owner_fixture else "FAIL",
+                "scope": "owner's detail response identifies the exact foreign Customer UUID",
+            })
+            if valid_owner_fixture:
+                expect("G4-05-cross-organization-conceal",
+                       get(base, path, token), 404,
+                       "same proven Customer must be concealed from the other organization")
+        else:
+            records.append({"case": "G4-05-cross-organization-conceal", "status": "NOT_RUN",
+                            "scope": "cannot claim isolation without a proven owner-visible fixture"})
     else:
-        records.append({"case": "G4-05-foreign-owner", "status": "NOT_RUN",
-                        "scope": "requires seeded G4_FOREIGN_CUSTOMER_PUBLIC_ID"})
+        records.append({"case": "G4-05-cross-organization-conceal", "status": "NOT_RUN",
+                        "scope": "requires paired synthetic foreign owner + Customer fixture"})
 
     # This probe cannot establish live token issuance, Core→Carelog projection,
     # actual upstream-call counts, DB state, or full G4 cutover/rollback evidence.
