@@ -34,6 +34,10 @@ class HttpResult:
     body: bytes
 
 
+class ResponseContractViolation(RuntimeError):
+    """A successful upstream HTTP status with an invalid Product response."""
+
+
 def loopback_base(raw: str) -> str:
     parsed = urlsplit(raw)
     if (
@@ -85,7 +89,7 @@ def customer_items(result: HttpResult) -> list:
             raise ValueError("data must be an array")
         return items
     except (ValueError, KeyError, TypeError) as error:
-        raise RuntimeError("Customer response is not the expected JSON data array") from error
+        raise ResponseContractViolation("Customer response is not the expected JSON data array") from error
 
 
 def run() -> list[dict[str, str]]:
@@ -167,6 +171,12 @@ def run() -> list[dict[str, str]]:
 def main() -> int:
     try:
         records = run()
+    except ResponseContractViolation:
+        # A reachable server returning an invalid Product contract is a failure,
+        # not an environment blocker. Do not print the response body.
+        print(json.dumps({"verdict": "FAIL", "reason": "Unexpected Customer response contract"},
+                         ensure_ascii=False))
+        return 1
     except (ValueError, RuntimeError) as error:
         # Avoid echoing endpoint response bodies, tokens, URL credentials, or secrets.
         print(json.dumps({"verdict": "BLOCKED", "reason": str(error)},
