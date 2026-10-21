@@ -70,8 +70,9 @@ python3 scripts/rpl55_g4_nonprod_smoke.py
 unset G4_MANAGER_ACCESS_TOKEN
 
 # 선택: 이미 폐기/만료된 합성 토큰과 다른 조직에 속한 Customer fixture ID
-# G4_EXPIRED_ACCESS_TOKEN, G4_REVOKED_ACCESS_TOKEN,
-# G4_FOREIGN_CUSTOMER_PUBLIC_ID
+# G4_EXPIRED_ACCESS_TOKEN, G4_REVOKED_ACCESS_TOKEN
+# G4_FOREIGN_CUSTOMER_PUBLIC_ID (Customer owned by synthetic user B),
+# G4_FOREIGN_OWNER_ACCESS_TOKEN (synthetic user B, distinct from MANAGER A)
 ~~~
 
 - 필수 범위: G4-01 유효 MANAGER JWT의 Customer Collection 조회(200), G4-02 외부 신뢰 헤더 위조 시 동일 조회 결과, G4-03 토큰 누락·형식 오류(401), G4-08 내부 경로 접근(403).
@@ -105,3 +106,13 @@ unset G4_MANAGER_ACCESS_TOKEN
 - **동일 Git Blob SHA 확인:** `scripts/rpl55_g4_nonprod_smoke.py` = `2528788e7f43b991f1850ec1413790dd0992653b`; `scripts/tests/test_rpl55_g4_nonprod_smoke.py` = `dbf5e3bbbfc23f677bdd9c3b5db7c2c6d3c7d1e0`.
 - **증거 범위:** 로컬 표준 라이브러리 스텁에 대한 검사기 자체 테스트 PASS. 실 Gateway+Identity+Carelog 프로세스 E2E, 운영 인증·Cutover·Rollback은 여전히 NOT_RUN. 추가 Source Merge·Deploy·DB 조작 없음.
 
+
+## 8. G4-05 위양성 방지 (2026-10-22)
+
+**독립 정적 검수 Finding:** 종전 G4-05는 사용자 A로 임의 UUID 조회시 `404` 하나만 확인했으므로, 실제 존재하지 않는 Customer를 사용해도 조직 격리 PASS가 가능했다.
+
+- 테스트용 조직 B의 별도 `G4_FOREIGN_OWNER_ACCESS_TOKEN`과 실제 존재하는 `G4_FOREIGN_CUSTOMER_PUBLIC_ID`를 **함께** 요구한다. 두 토큰이 같거나 쌍이 불완전하면 `BLOCKED`.
+- 먼저 사용자 B로 동일 Customer ID의 Detail을 조회해 **200 및 `data.publicId` 일치**를 증명해야 한다. 그렇지 않으면 `FAIL`이고 조직 A의 404를 성공으로 계산하지 않는다.
+- 그 뒤 사용자 A가 **동일 ID**를 조회할 때 404이면 `G4-05-cross-organization-conceal` PASS로 기록한다.
+- 별도의 스텁 단위 테스트 3개(정상 쌍 / 존재하지 않는 ID / 불완전·동일 토큰) 추가. **신규 SHA의 실행 결과는 NOT_RUN**이며, 종전 10 PASS는 이전 SHA에만 유효하다.
+- 이 수정은 Customer DB를 변경하거나 시딩하지 않는다. 실제 비운영 실행 환경에서 별도 합성 Fixture를 준비해야 한다. 최종 Production G4 Gate와는 별도다.
