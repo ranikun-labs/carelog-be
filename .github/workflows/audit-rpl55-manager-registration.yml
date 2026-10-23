@@ -18,8 +18,15 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Verify container engine before Spring Testcontainers
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ls -l /var/run/docker.sock || true
+          docker version
+          docker info --format 'ServerVersion={{.ServerVersion}} OperatingSystem={{.OperatingSystem}}'
       - name: Legacy manager register and login (Testcontainers PostgreSQL)
-        run: ./gradlew :carelog-be:test --tests 'carelog.carelog.identity.ManagerRegistrationAndLoginIntegrationTest*' --no-daemon --stacktrace
+        run: ./gradlew :carelog-be:test --tests 'carelog.carelog.identity.ManagerRegistrationAndLoginIntegrationTest*' --no-daemon --stacktrace --info
   rollback:
     name: Legacy Carelog manager registration atomic rollback
     runs-on: ubuntu-latest
@@ -32,5 +39,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Verify container engine before Spring Testcontainers
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ls -l /var/run/docker.sock || true
+          docker version
+          docker info --format 'ServerVersion={{.ServerVersion}} OperatingSystem={{.OperatingSystem}}'
       - name: Legacy manager rollback (Testcontainers PostgreSQL)
-        run: ./gradlew :carelog-be:test --tests 'carelog.carelog.identity.ManagerRegistrationRollbackIntegrationTest' --no-daemon --stacktrace
+        run: ./gradlew :carelog-be:test --tests 'carelog.carelog.identity.ManagerRegistrationRollbackIntegrationTest' --no-daemon --stacktrace --info
