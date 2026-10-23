@@ -1,0 +1,34 @@
+name: Disposable Carelog PR52-53 combined regression
+on:
+  push:
+    branches: ['audit/product-carelog-52-53-20261023']
+permissions:
+  contents: read
+jobs:
+  webmvc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Customer header fail-closed tests
+        run: ./gradlew :carelog-be:test --tests 'carelog.carelog.customer.web.CustomerControllerTest' --no-daemon --stacktrace
+  g4-script:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: G4 smoke runner syntax
+        run: python -m compileall -q scripts
+      - name: G4 stub-based smoke runner tests
+        run: python -m unittest discover -s scripts/tests -p 'test_rpl55_g4_nonprod_smoke.py'
