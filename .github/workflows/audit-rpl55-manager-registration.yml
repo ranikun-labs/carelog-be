@@ -1,0 +1,36 @@
+name: RPL-55 manager registration and rollback targeted evidence
+on:
+  push:
+    branches:
+      - audit/rpl55-manager-registration-regression-20261023
+permissions:
+  contents: read
+jobs:
+  registration-login:
+    name: Legacy Carelog manager registration/login compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Legacy manager register and login (Testcontainers PostgreSQL)
+        run: ./gradlew :carelog-be:test --tests 'carelog.carelog.identity.ManagerRegistrationAndLoginIntegrationTest*' --no-daemon --stacktrace
+  rollback:
+    name: Legacy Carelog manager registration atomic rollback
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Legacy manager rollback (Testcontainers PostgreSQL)
+        run: ./gradlew :carelog-be:test --tests 'carelog.carelog.identity.ManagerRegistrationRollbackIntegrationTest' --no-daemon --stacktrace
