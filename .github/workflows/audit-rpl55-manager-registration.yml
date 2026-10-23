@@ -25,6 +25,14 @@ jobs:
           ls -l /var/run/docker.sock || true
           docker version
           docker info --format 'ServerVersion={{.ServerVersion}} OperatingSystem={{.OperatingSystem}}'
+      - name: CI-only Docker 29 / Testcontainers 1.20 compatibility
+        shell: bash
+        run: |
+          # Testcontainers 1.20.6 uses docker-java API 1.32 by default.
+          # Docker 29.4.2 requires >= 1.40. Isolated CI only; do not
+          # commit workaround to product test resources or change Docker daemon.
+          printf 'api.version=1.44\n' > carelog-be/src/test/resources/docker-java.properties
+          grep -qx 'api.version=1.44' carelog-be/src/test/resources/docker-java.properties
       - name: Legacy manager register and login (Testcontainers PostgreSQL)
         run: ./gradlew :carelog-be:test --tests 'carelog.carelog.identity.ManagerRegistrationAndLoginIntegrationTest*' --no-daemon --stacktrace --info
   rollback:
@@ -46,5 +54,13 @@ jobs:
           ls -l /var/run/docker.sock || true
           docker version
           docker info --format 'ServerVersion={{.ServerVersion}} OperatingSystem={{.OperatingSystem}}'
+      - name: CI-only Docker 29 / Testcontainers 1.20 compatibility
+        shell: bash
+        run: |
+          # Testcontainers 1.20.6 uses docker-java API 1.32 by default.
+          # Docker 29.4.2 requires >= 1.40. Isolated CI only; do not
+          # commit workaround to product test resources or change Docker daemon.
+          printf 'api.version=1.44\\n' > carelog-be/src/test/resources/docker-java.properties
+          grep -qx 'api.version=1.44' carelog-be/src/test/resources/docker-java.properties
       - name: Legacy manager rollback (Testcontainers PostgreSQL)
         run: ./gradlew :carelog-be:test --tests 'carelog.carelog.identity.ManagerRegistrationRollbackIntegrationTest' --no-daemon --stacktrace --info
