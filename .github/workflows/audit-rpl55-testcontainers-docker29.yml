@@ -1,0 +1,28 @@
+name: RPL-55 Testcontainers Docker 29 compatibility regression
+on:
+  push:
+    branches: ['fix/rpl55-carelog-testcontainers-docker29-20261023']
+permissions:
+  contents: read
+jobs:
+  manager-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Record Docker Engine API compatibility
+        run: docker version --format 'Server={{.Server.Version}} API={{.Server.APIVersion}} Minimum={{.Server.MinAPIVersion}}'
+      - name: Assert resolved Testcontainers version
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew :carelog-be:dependencyInsight --dependency org.testcontainers:testcontainers --configuration testRuntimeClasspath --no-daemon > testcontainers-dependency-insight.txt
+          grep -q 'org.testcontainers:testcontainers:1.21.4' testcontainers-dependency-insight.txt
+      - name: Register Login and Rollback - real PostgreSQL Testcontainers
+        run: ./gradlew :carelog-be:test --tests 'carelog.carelog.identity.ManagerRegistrationAndLoginIntegrationTest*' --tests 'carelog.carelog.identity.ManagerRegistrationRollbackIntegrationTest' --no-daemon --stacktrace
