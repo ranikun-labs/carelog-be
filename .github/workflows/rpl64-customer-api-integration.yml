@@ -5,9 +5,10 @@ on:
       - dev
     paths:
       - .github/workflows/rpl64-customer-api-integration.yml
-      - carelog-be/src/test/java/carelog/carelog/customer/CustomerProductApiIntegrationTest.java
-      - carelog-be/src/test/java/carelog/carelog/customerevent/CustomerEventProductApiIntegrationTest.java
+      - carelog-be/src/main/**
+      - carelog-be/src/test/**
       - carelog-be/build.gradle
+      - build.gradle
       - gradle/**
       - gradlew
       - settings.gradle
