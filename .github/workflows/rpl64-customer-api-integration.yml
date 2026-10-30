@@ -1,0 +1,34 @@
+name: RPL-64 Carelog Customer API database integration
+on:
+  pull_request:
+    branches:
+      - dev
+    paths:
+      - .github/workflows/rpl64-customer-api-integration.yml
+      - carelog-be/src/test/java/carelog/carelog/customer/CustomerProductApiIntegrationTest.java
+      - carelog-be/src/test/java/carelog/carelog/customerevent/CustomerEventProductApiIntegrationTest.java
+      - carelog-be/build.gradle
+      - gradle/**
+      - gradlew
+      - settings.gradle
+  push:
+    branches:
+      - codex/rpl64-carelog-be-api-integration-20261030
+permissions:
+  contents: read
+jobs:
+  customer-api-testcontainers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set validated Docker Java API compatibility for hosted Docker 29
+        run: printf 'api.version=1.44\n' > "$HOME/.docker-java.properties"
+      - name: Run Customer and CustomerEvent PostgreSQL integration tests
+        run: ./gradlew :carelog-be:test --tests 'carelog.carelog.customer.CustomerProductApiIntegrationTest' --tests 'carelog.carelog.customerevent.CustomerEventProductApiIntegrationTest' --no-daemon --stacktrace --console=plain
