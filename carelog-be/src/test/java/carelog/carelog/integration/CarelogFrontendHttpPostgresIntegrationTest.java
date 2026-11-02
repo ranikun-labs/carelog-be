@@ -32,7 +32,10 @@ import static org.junit.jupiter.api.Assertions.fail;
  * Synthetic X-Gateway-Secret, X-User-Id, X-Organization-Id, X-Role, and X-Public-Id headers mirror the
  * existing BE integration fixture; no Gateway or Identity service is started by this test.
  */
-@SpringBootTest(classes = CarelogApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(
+        classes = CarelogApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = "server.address=127.0.0.1")
 @ActiveProfiles("test")
 @Import(PostgreSqlTestContainerConfiguration.class)
 class CarelogFrontendHttpPostgresIntegrationTest {
