@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.OffsetDateTime;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.UUID;
@@ -134,8 +135,13 @@ class CarelogFrontendHttpPostgresIntegrationTest {
             assertThat(result.path("eventCreatedStatus").asText()).isEqualTo("PLANNED");
             assertThat(result.path("eventListedId").asText()).isEqualTo(eventPublicId.toString());
             assertThat(result.path("eventDetailId").asText()).isEqualTo(eventPublicId.toString());
-            assertThat(result.path("eventEditedScheduledAt").asText())
-                    .isEqualTo(result.path("eventCancelledScheduledAt").asText());
+            OffsetDateTime expectedEventSchedule = OffsetDateTime.parse("2027-01-12T10:15:00+09:00");
+            OffsetDateTime eventScheduleAfterEdit = OffsetDateTime.parse(
+                    result.path("eventEditedScheduledAt").asText());
+            OffsetDateTime eventScheduleAfterCancel = OffsetDateTime.parse(
+                    result.path("eventCancelledScheduledAt").asText());
+            assertThat(eventScheduleAfterEdit.toInstant()).isEqualTo(expectedEventSchedule.toInstant());
+            assertThat(eventScheduleAfterCancel.toInstant()).isEqualTo(eventScheduleAfterEdit.toInstant());
             assertThat(result.path("eventEditedNote").asText()).isEqualTo("event updated note");
             assertThat(result.path("eventCancelledStatus").asText()).isEqualTo("CANCELLED");
             assertThat(result.path("eventCancelledHasOccurredAt").asBoolean()).isFalse();

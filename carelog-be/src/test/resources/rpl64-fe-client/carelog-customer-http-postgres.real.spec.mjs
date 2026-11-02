@@ -138,10 +138,11 @@ test('the FE production Customer and CustomerEvent adapters reach BE HTTP with s
   expect(result.eventCreatedStatus).toBe('PLANNED');
   expect(result.eventListedId).toBe(result.eventId);
   expect(result.eventDetailId).toBe(result.eventId);
-  expect(result.eventEditedScheduledAt).toBe(eventRescheduledAt);
+  expect(Date.parse(result.eventEditedScheduledAt)).toBe(Date.parse(eventRescheduledAt));
   expect(result.eventEditedNote).toBe('event updated note');
   expect(result.eventCancelledStatus).toBe('CANCELLED');
-  expect(result.eventCancelledScheduledAt).toBe(eventRescheduledAt);
+  expect(Date.parse(result.eventCancelledScheduledAt)).toBe(Date.parse(eventRescheduledAt));
+  expect(Date.parse(result.eventCancelledScheduledAt)).toBe(Date.parse(result.eventEditedScheduledAt));
   expect(result.eventCancelledHasOccurredAt).toBe(false);
   expect(result.eventVisibleInOtherOrganization).toBe(false);
 
