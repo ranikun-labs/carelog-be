@@ -53,8 +53,8 @@ class CarelogFrontendHttpPostgresIntegrationTest {
     private String testGatewaySecret;
 
     @Test
-    @DisplayName("FE Customer adapter writes through HTTP and reads the committed PostgreSQL row")
-    void productionCustomerAdapterUsesHttpAndPostgres() throws Exception {
+    @DisplayName("FE Customer와 CustomerEvent production adapter는 HTTP와 PostgreSQL에서 조직 범위를 보존한다")
+    void productionProductAdaptersUseHttpAndPostgres() throws Exception {
         String configuredFrontendRoot = System.getenv("CARELOG_FE_ROOT");
         if (configuredFrontendRoot == null || configuredFrontendRoot.isBlank()) {
             throw new IllegalStateException("CARELOG_FE_ROOT must point to the pinned Carelog FE checkout.");
@@ -96,10 +96,11 @@ class CarelogFrontendHttpPostgresIntegrationTest {
             Process playwright = processBuilder.start();
             if (!playwright.waitFor(3, TimeUnit.MINUTES)) {
                 playwright.destroyForcibly().waitFor(10, TimeUnit.SECONDS);
-                fail("The FE Playwright request timed out.\n" + readTextIfPresent(playwrightLog));
+                fail("The FE Playwright request timed out.\n"
+                        + redactGatewaySecret(readTextIfPresent(playwrightLog)));
             }
 
-            String playwrightOutput = readTextIfPresent(playwrightLog);
+            String playwrightOutput = redactGatewaySecret(readTextIfPresent(playwrightLog));
             assertThat(playwright.exitValue())
                     .as("The FE browser test must succeed. Output:\n%s", playwrightOutput)
                     .isZero();
@@ -126,6 +127,40 @@ class CarelogFrontendHttpPostgresIntegrationTest {
             assertThat(persistedRow.get("role")).isEqualTo("CUSTOMER");
             assertThat(persistedRow.get("name")).isEqualTo(displayName);
             assertThat(persistedRow.get("customer_memo")).isEqualTo(customerMemo);
+
+            UUID eventPublicId = UUID.fromString(result.path("eventId").asText());
+            UUID eventCustomerPublicId = UUID.fromString(result.path("eventCustomerId").asText());
+            assertThat(eventCustomerPublicId).isEqualTo(customerPublicId);
+            assertThat(result.path("eventCreatedStatus").asText()).isEqualTo("PLANNED");
+            assertThat(result.path("eventListedId").asText()).isEqualTo(eventPublicId.toString());
+            assertThat(result.path("eventDetailId").asText()).isEqualTo(eventPublicId.toString());
+            assertThat(result.path("eventEditedScheduledAt").asText())
+                    .isEqualTo(result.path("eventCancelledScheduledAt").asText());
+            assertThat(result.path("eventEditedNote").asText()).isEqualTo("event updated note");
+            assertThat(result.path("eventCancelledStatus").asText()).isEqualTo("CANCELLED");
+            assertThat(result.path("eventCancelledHasOccurredAt").asBoolean()).isFalse();
+            assertThat(result.path("eventVisibleInOtherOrganization").asBoolean()).isFalse();
+
+            Map<String, Object> persistedEventRow = jdbcTemplate.queryForMap("""
+                    SELECT event.public_id, event.organization_id, event.status, event.note,
+                           event.occurred_at, customer.public_id AS customer_public_id
+                    FROM customer_events event
+                    JOIN users customer ON customer.id = event.customer_id
+                    WHERE event.public_id = ?
+                    """, eventPublicId);
+            assertThat(persistedEventRow.get("public_id")).isEqualTo(eventPublicId);
+            assertThat(persistedEventRow.get("organization_id")).isEqualTo(organizationId);
+            assertThat(persistedEventRow.get("customer_public_id")).isEqualTo(customerPublicId);
+            assertThat(persistedEventRow.get("status")).isEqualTo("CANCELLED");
+            assertThat(persistedEventRow.get("note")).isEqualTo("event updated note");
+            assertThat(persistedEventRow.get("occurred_at")).isNull();
+
+            Boolean persistedScheduleMatches = jdbcTemplate.queryForObject("""
+                    SELECT scheduled_at = CAST(? AS timestamptz)
+                    FROM customer_events
+                    WHERE public_id = ?
+                    """, Boolean.class, result.path("eventCancelledScheduledAt").asText(), eventPublicId);
+            assertThat(persistedScheduleMatches).isTrue();
         } finally {
             deleteDirectory(temporaryDirectory);
         }
@@ -145,6 +180,12 @@ class CarelogFrontendHttpPostgresIntegrationTest {
 
     private static String readTextIfPresent(Path path) throws IOException {
         return Files.exists(path) ? Files.readString(path) : "";
+    }
+
+    private String redactGatewaySecret(String output) {
+        return testGatewaySecret == null || testGatewaySecret.isEmpty()
+                ? output
+                : output.replace(testGatewaySecret, "[REDACTED]");
     }
 
     private static void deleteDirectory(Path directory) throws IOException {
