@@ -23,8 +23,12 @@ test('the FE production Customer and CustomerEvent adapters reach BE HTTP with s
   const otherPublicId = randomUUID();
   const displayName = 'RPL-64 FE HTTP ' + randomUUID();
   const customerMemo = 'rpl64-disposable-http-postgres-readback';
+  const updatedDisplayName = 'RPL-64 FE HTTP edited ' + randomUUID();
+  const updatedCustomerMemo = 'rpl64-disposable-http-postgres-edited';
   const eventScheduledAt = '2027-01-12T10:00:00+09:00';
   const eventRescheduledAt = '2027-01-12T10:15:00+09:00';
+  const occurredEventScheduledAt = '2027-01-13T10:00:00+09:00';
+  const occurredAt = '2027-01-13T10:30:00+09:00';
   const eventListFrom = '2027-01-01T00:00:00+09:00';
   const eventListTo = '2027-02-01T00:00:00+09:00';
 
@@ -61,6 +65,14 @@ test('the FE production Customer and CustomerEvent adapters reach BE HTTP with s
     const organizationRows = await organizationPorts.customerPort.list();
     const listed = organizationRows.find((row) => row.id === created.id);
     if (!listed) throw new Error('The FE CustomerPort could not read its created record back over HTTP.');
+    const detailedCustomer = await organizationPorts.customerPort.get(created.id);
+    const editedCustomer = await organizationPorts.customerPort.edit(created.id, detailedCustomer, {
+      displayName: input.updatedDisplayName,
+      customerMemo: input.updatedCustomerMemo,
+    });
+    const editedCustomerRows = await organizationPorts.customerPort.list();
+    const listedEditedCustomer = editedCustomerRows.find((row) => row.id === created.id);
+    if (!listedEditedCustomer) throw new Error('The FE CustomerPort could not list its edited record.');
 
     const createdEvent = await organizationPorts.customerEventPort.create({
       status: 'PLANNED',
@@ -82,6 +94,17 @@ test('the FE production Customer and CustomerEvent adapters reach BE HTTP with s
       note: 'event updated note',
     });
     const canceledEvent = await organizationPorts.customerEventPort.cancel(createdEvent.id);
+    const createdOccurredEvent = await organizationPorts.customerEventPort.create({
+      status: 'PLANNED',
+      customerId: created.id,
+      scheduledAt: input.occurredEventScheduledAt,
+      descriptor: '상담',
+      note: 'event occur initial note',
+    });
+    const occurredEvent = await organizationPorts.customerEventPort.occur(
+      createdOccurredEvent.id,
+      input.occurredAt,
+    );
 
     const otherOrganizationPorts = createPorts(
       input.otherOrganizationId,
@@ -98,9 +121,15 @@ test('the FE production Customer and CustomerEvent adapters reach BE HTTP with s
     return {
       id: created.id,
       organizationId: input.organizationId,
-      displayName: created.displayName,
-      customerMemo: created.customerMemo,
-      listedDisplayName: listed.displayName,
+      createdDisplayName: created.displayName,
+      createdCustomerMemo: created.customerMemo,
+      customerDetailDisplayName: detailedCustomer.displayName,
+      customerDetailMemo: detailedCustomer.customerMemo,
+      displayName: editedCustomer.displayName,
+      customerMemo: editedCustomer.customerMemo,
+      createdListedDisplayName: listed.displayName,
+      listedDisplayName: listedEditedCustomer.displayName,
+      listedCustomerMemo: listedEditedCustomer.customerMemo,
       visibleInOtherOrganization: otherOrganizationRows.some((row) => row.id === created.id),
       eventId: createdEvent.id,
       eventCustomerId: createdEvent.customerId,
@@ -113,6 +142,14 @@ test('the FE production Customer and CustomerEvent adapters reach BE HTTP with s
       eventCancelledScheduledAt: canceledEvent.scheduledAt,
       eventCancelledHasOccurredAt: Object.prototype.hasOwnProperty.call(canceledEvent, 'occurredAt'),
       eventVisibleInOtherOrganization: otherOrganizationEvents.some((row) => row.id === createdEvent.id),
+      occurredEventId: occurredEvent.id,
+      occurredEventCustomerId: occurredEvent.customerId,
+      occurredEventStatus: occurredEvent.status,
+      occurredEventOccurredAt: occurredEvent.occurredAt,
+      occurredEventScheduledAt: occurredEvent.scheduledAt,
+      occurredEventVisibleInOtherOrganization: otherOrganizationEvents.some(
+        (row) => row.id === occurredEvent.id,
+      ),
     };
   }, {
     gatewaySecret,
@@ -124,15 +161,25 @@ test('the FE production Customer and CustomerEvent adapters reach BE HTTP with s
     otherPublicId,
     displayName,
     customerMemo,
+    updatedDisplayName,
+    updatedCustomerMemo,
     eventScheduledAt,
     eventRescheduledAt,
+    occurredEventScheduledAt,
+    occurredAt,
     eventListFrom,
     eventListTo,
   });
 
-  expect(result.displayName).toBe(displayName);
-  expect(result.customerMemo).toBe(customerMemo);
-  expect(result.listedDisplayName).toBe(displayName);
+  expect(result.createdDisplayName).toBe(displayName);
+  expect(result.createdCustomerMemo).toBe(customerMemo);
+  expect(result.customerDetailDisplayName).toBe(displayName);
+  expect(result.customerDetailMemo).toBe(customerMemo);
+  expect(result.displayName).toBe(updatedDisplayName);
+  expect(result.customerMemo).toBe(updatedCustomerMemo);
+  expect(result.createdListedDisplayName).toBe(displayName);
+  expect(result.listedDisplayName).toBe(updatedDisplayName);
+  expect(result.listedCustomerMemo).toBe(updatedCustomerMemo);
   expect(result.visibleInOtherOrganization).toBe(false);
   expect(result.eventCustomerId).toBe(result.id);
   expect(result.eventCreatedStatus).toBe('PLANNED');
@@ -145,6 +192,11 @@ test('the FE production Customer and CustomerEvent adapters reach BE HTTP with s
   expect(Date.parse(result.eventCancelledScheduledAt)).toBe(Date.parse(result.eventEditedScheduledAt));
   expect(result.eventCancelledHasOccurredAt).toBe(false);
   expect(result.eventVisibleInOtherOrganization).toBe(false);
+  expect(result.occurredEventCustomerId).toBe(result.id);
+  expect(result.occurredEventStatus).toBe('OCCURRED');
+  expect(Date.parse(result.occurredEventOccurredAt)).toBe(Date.parse(occurredAt));
+  expect(Date.parse(result.occurredEventScheduledAt)).toBe(Date.parse(occurredEventScheduledAt));
+  expect(result.occurredEventVisibleInOtherOrganization).toBe(false);
 
   await writeFile(resultFile, JSON.stringify(result), { encoding: 'utf8', flag: 'wx' });
 });

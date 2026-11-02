@@ -111,10 +111,17 @@ class CarelogFrontendHttpPostgresIntegrationTest {
             JsonNode result = objectMapper.readTree(Files.readString(resultFile));
             UUID customerPublicId = UUID.fromString(result.path("id").asText());
             UUID organizationId = UUID.fromString(result.path("organizationId").asText());
+            assertThat(result.path("createdListedDisplayName").asText())
+                    .isEqualTo(result.path("createdDisplayName").asText());
+            assertThat(result.path("customerDetailDisplayName").asText())
+                    .isEqualTo(result.path("createdDisplayName").asText());
+            assertThat(result.path("customerDetailMemo").asText())
+                    .isEqualTo(result.path("createdCustomerMemo").asText());
             String displayName = result.path("displayName").asText();
             String customerMemo = result.path("customerMemo").asText();
 
             assertThat(result.path("listedDisplayName").asText()).isEqualTo(displayName);
+            assertThat(result.path("listedCustomerMemo").asText()).isEqualTo(customerMemo);
             assertThat(result.path("visibleInOtherOrganization").asBoolean()).isFalse();
 
             // This query runs after the FE browser's HTTP request has completed and the API transaction committed.
@@ -167,6 +174,49 @@ class CarelogFrontendHttpPostgresIntegrationTest {
                     WHERE public_id = ?
                     """, Boolean.class, result.path("eventCancelledScheduledAt").asText(), eventPublicId);
             assertThat(persistedScheduleMatches).isTrue();
+
+            UUID occurredEventPublicId = UUID.fromString(result.path("occurredEventId").asText());
+            assertThat(result.path("occurredEventCustomerId").asText()).isEqualTo(customerPublicId.toString());
+            assertThat(result.path("occurredEventStatus").asText()).isEqualTo("OCCURRED");
+            assertThat(result.path("occurredEventVisibleInOtherOrganization").asBoolean()).isFalse();
+
+            OffsetDateTime expectedOccurredEventSchedule = OffsetDateTime.parse(
+                    "2027-01-13T10:00:00+09:00");
+            OffsetDateTime expectedEventOccurrence = OffsetDateTime.parse(
+                    "2027-01-13T10:30:00+09:00");
+            OffsetDateTime actualOccurredEventSchedule = OffsetDateTime.parse(
+                    result.path("occurredEventScheduledAt").asText());
+            OffsetDateTime actualEventOccurrence = OffsetDateTime.parse(
+                    result.path("occurredEventOccurredAt").asText());
+            assertThat(actualOccurredEventSchedule.toInstant())
+                    .isEqualTo(expectedOccurredEventSchedule.toInstant());
+            assertThat(actualEventOccurrence.toInstant()).isEqualTo(expectedEventOccurrence.toInstant());
+
+            Map<String, Object> persistedOccurredEventRow = jdbcTemplate.queryForMap("""
+                    SELECT event.public_id, event.organization_id, event.status, event.note,
+                           customer.public_id AS customer_public_id
+                    FROM customer_events event
+                    JOIN users customer ON customer.id = event.customer_id
+                    WHERE event.public_id = ?
+                    """, occurredEventPublicId);
+            assertThat(persistedOccurredEventRow.get("public_id")).isEqualTo(occurredEventPublicId);
+            assertThat(persistedOccurredEventRow.get("organization_id")).isEqualTo(organizationId);
+            assertThat(persistedOccurredEventRow.get("customer_public_id")).isEqualTo(customerPublicId);
+            assertThat(persistedOccurredEventRow.get("status")).isEqualTo("OCCURRED");
+            assertThat(persistedOccurredEventRow.get("note")).isEqualTo("event occur initial note");
+
+            Boolean persistedOccurredScheduleMatches = jdbcTemplate.queryForObject("""
+                    SELECT scheduled_at = CAST(? AS timestamptz)
+                    FROM customer_events
+                    WHERE public_id = ?
+                    """, Boolean.class, result.path("occurredEventScheduledAt").asText(), occurredEventPublicId);
+            assertThat(persistedOccurredScheduleMatches).isTrue();
+            Boolean persistedOccurredAtMatches = jdbcTemplate.queryForObject("""
+                    SELECT occurred_at = CAST(? AS timestamptz)
+                    FROM customer_events
+                    WHERE public_id = ?
+                    """, Boolean.class, result.path("occurredEventOccurredAt").asText(), occurredEventPublicId);
+            assertThat(persistedOccurredAtMatches).isTrue();
         } finally {
             deleteDirectory(temporaryDirectory);
         }
