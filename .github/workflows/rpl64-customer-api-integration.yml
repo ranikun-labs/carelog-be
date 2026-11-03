@@ -35,14 +35,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ranikun-labs/carelog-fe
-          ref: fecbe55258dbff1460c24c8a107e4bbfebc91011
+          ref: 190c70564df5261b9a711b8e23cd7b457bbccbc9
           path: carelog-fe
           persist-credentials: false
 
       - name: Verify backend and frontend source SHAs
         env:
           EXPECTED_BACKEND_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-          EXPECTED_FRONTEND_SHA: fecbe55258dbff1460c24c8a107e4bbfebc91011
+          EXPECTED_FRONTEND_SHA: 190c70564df5261b9a711b8e23cd7b457bbccbc9
         run: |
           test "$(git rev-parse HEAD)" = "$EXPECTED_BACKEND_SHA"
           test "$(git -C carelog-fe rev-parse HEAD)" = "$EXPECTED_FRONTEND_SHA"
