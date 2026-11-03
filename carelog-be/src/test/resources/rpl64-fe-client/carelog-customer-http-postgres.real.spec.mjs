@@ -445,6 +445,7 @@ test('Carelog Customer and CustomerEvent screens use real BE HTTP with synthetic
     await rpl64LoginThroughUi(otherPage, 'rpl64-synthetic-other-manager', 'synthetic-test-only');
     await otherPage.locator('[data-side-navigation] a[href="/app/customers"]').click();
     await expect(otherPage.locator('[data-customers-page]')).toBeVisible();
+    await expect(otherPage.locator('[data-customers-empty]')).toBeVisible();
     await expect(
       otherPage.locator('[data-customer-card][data-customer-id="' + customerId + '"]'),
     ).toHaveCount(0);
