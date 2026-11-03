@@ -97,11 +97,18 @@ class CarelogFrontendHttpPostgresIntegrationTest {
             Process playwright = processBuilder.start();
             if (!playwright.waitFor(6, TimeUnit.MINUTES)) {
                 playwright.destroyForcibly().waitFor(10, TimeUnit.SECONDS);
+                String timedOutOutput = redactPlaywrightDiagnostics(readTextIfPresent(playwrightLog));
                 fail("The FE Playwright request timed out.\n"
-                        + redactGatewaySecret(readTextIfPresent(playwrightLog)));
+                        + diagnosticTail(timedOutOutput));
             }
 
-            String playwrightOutput = redactGatewaySecret(readTextIfPresent(playwrightLog));
+            String playwrightOutput = redactPlaywrightDiagnostics(readTextIfPresent(playwrightLog));
+            if (playwright.exitValue() != 0) {
+                // The temp directory is deleted after this test, so emit only bounded, sanitized
+                // diagnostics before failing to make CI failures actionable.
+                System.err.println("RPL-64 sanitized Playwright failure output (tail):\n"
+                        + diagnosticTail(playwrightOutput));
+            }
             assertThat(playwright.exitValue())
                     .as("The FE browser test must succeed. Output:\n%s", playwrightOutput)
                     .isZero();
@@ -281,10 +288,18 @@ class CarelogFrontendHttpPostgresIntegrationTest {
         return Files.exists(path) ? Files.readString(path) : "";
     }
 
-    private String redactGatewaySecret(String output) {
-        return testGatewaySecret == null || testGatewaySecret.isEmpty()
+    private String redactPlaywrightDiagnostics(String output) {
+        String redacted = testGatewaySecret == null || testGatewaySecret.isEmpty()
                 ? output
                 : output.replace(testGatewaySecret, "[REDACTED]");
+        return redacted
+                .replace("rpl64-synthetic-access-token", "[REDACTED]")
+                .replace("rpl64-synthetic-refresh-token", "[REDACTED]")
+                .replace("synthetic-test-only", "[REDACTED]");
+    }
+
+    private static String diagnosticTail(String output) {
+        return output.length() <= 24_000 ? output : output.substring(output.length() - 24_000);
     }
 
     private static void deleteDirectory(Path directory) throws IOException {
