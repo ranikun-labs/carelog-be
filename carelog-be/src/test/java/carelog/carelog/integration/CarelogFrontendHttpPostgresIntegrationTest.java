@@ -104,15 +104,11 @@ class CarelogFrontendHttpPostgresIntegrationTest {
 
             String playwrightOutput = redactPlaywrightDiagnostics(readTextIfPresent(playwrightLog));
             if (playwright.exitValue() != 0) {
-                // The temp directory is deleted after this test, so emit only bounded, sanitized
-                // diagnostics before failing to make CI failures actionable.
                 System.err.println("RPL-64 sanitized Playwright failure output (tail):\n"
                         + diagnosticTail(playwrightOutput));
+                fail("The FE browser test failed; see the sanitized tail above.");
             }
-            assertThat(playwright.exitValue())
-                    .as("The FE browser test must succeed. Output:\n%s", playwrightOutput)
-                    .isZero();
-            System.out.println(playwrightOutput);
+            System.out.println(diagnosticTail(playwrightOutput));
             assertThat(resultFile).exists();
 
             JsonNode result = objectMapper.readTree(Files.readString(resultFile));
