@@ -90,6 +90,7 @@ jobs:
 
           python3 - <<'PY'
           from pathlib import Path
+          import sys
           import xml.etree.ElementTree as ET
 
           reports = Path("carelog-be/build/test-results/test")
@@ -102,15 +103,24 @@ jobs:
                       root = ET.parse(report).getroot()
                   except ET.ParseError:
                       continue
-                  for test_case in root.findall("testcase"):
-                      for stream in ("system-err", "system-out"):
-                          output = test_case.findtext(stream) or ""
+                  suites = [root] if root.tag == "testsuite" else root.findall(".//testsuite")
+                  for suite in suites:
+                      streams = [suite.findtext("system-err"), suite.findtext("system-out")]
+                      for test_case in suite.findall("testcase"):
+                          streams.extend((test_case.findtext("system-err"), test_case.findtext("system-out")))
+                      for output in streams:
+                          output = output or ""
                           if begin not in output or end not in output:
                               continue
                           block = output.split(begin, 1)[1].split(end, 1)[0].strip()
                           print("RPL-64 bounded, sanitized Playwright diagnostics (maximum 24000 characters):")
                           print(block[-24000:])
                           found = True
+                          break
+                      if found:
+                          break
+                  if found:
+                      break
           if not found:
               print("No bounded Playwright diagnostic block was captured in JUnit XML.")
           PY
