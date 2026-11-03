@@ -95,7 +95,7 @@ class CarelogFrontendHttpPostgresIntegrationTest {
             environment.put("CARELOG_RPL64_TEST_GATEWAY_SECRET", testGatewaySecret);
 
             Process playwright = processBuilder.start();
-            if (!playwright.waitFor(3, TimeUnit.MINUTES)) {
+            if (!playwright.waitFor(6, TimeUnit.MINUTES)) {
                 playwright.destroyForcibly().waitFor(10, TimeUnit.SECONDS);
                 fail("The FE Playwright request timed out.\n"
                         + redactGatewaySecret(readTextIfPresent(playwrightLog)));
@@ -217,6 +217,49 @@ class CarelogFrontendHttpPostgresIntegrationTest {
                     WHERE public_id = ?
                     """, Boolean.class, result.path("occurredEventOccurredAt").asText(), occurredEventPublicId);
             assertThat(persistedOccurredAtMatches).isTrue();
+
+            JsonNode uiResult = result.path("ui");
+            assertThat(uiResult.isObject()).isTrue();
+            UUID uiCustomerPublicId = UUID.fromString(uiResult.path("customerId").asText());
+            UUID uiOrganizationId = UUID.fromString(uiResult.path("organizationId").asText());
+            assertThat(uiResult.path("eventStatus").asText()).isEqualTo("OCCURRED");
+
+            Map<String, Object> uiCustomerRow = jdbcTemplate.queryForMap("""
+                    SELECT public_id, organization_id, role, name, customer_memo
+                    FROM users
+                    WHERE public_id = ?
+                    """, uiCustomerPublicId);
+            assertThat(uiCustomerRow.get("public_id")).isEqualTo(uiCustomerPublicId);
+            assertThat(uiCustomerRow.get("organization_id")).isEqualTo(uiOrganizationId);
+            assertThat(uiCustomerRow.get("role")).isEqualTo("CUSTOMER");
+            assertThat(uiCustomerRow.get("name")).isEqualTo(uiResult.path("displayName").asText());
+            assertThat(uiCustomerRow.get("customer_memo")).isEqualTo(uiResult.path("customerMemo").asText());
+
+            UUID uiEventPublicId = UUID.fromString(uiResult.path("eventId").asText());
+            Map<String, Object> uiEventRow = jdbcTemplate.queryForMap("""
+                    SELECT event.public_id, event.organization_id, event.status,
+                           customer.public_id AS customer_public_id
+                    FROM customer_events event
+                    JOIN users customer ON customer.id = event.customer_id
+                    WHERE event.public_id = ?
+                    """, uiEventPublicId);
+            assertThat(uiEventRow.get("public_id")).isEqualTo(uiEventPublicId);
+            assertThat(uiEventRow.get("organization_id")).isEqualTo(uiOrganizationId);
+            assertThat(uiEventRow.get("customer_public_id")).isEqualTo(uiCustomerPublicId);
+            assertThat(uiEventRow.get("status")).isEqualTo("OCCURRED");
+
+            Boolean uiScheduleMatches = jdbcTemplate.queryForObject("""
+                    SELECT scheduled_at = CAST(? AS timestamptz)
+                    FROM customer_events
+                    WHERE public_id = ?
+                    """, Boolean.class, uiResult.path("scheduledAt").asText(), uiEventPublicId);
+            assertThat(uiScheduleMatches).isTrue();
+            Boolean uiOccurredAtMatches = jdbcTemplate.queryForObject("""
+                    SELECT occurred_at = CAST(? AS timestamptz)
+                    FROM customer_events
+                    WHERE public_id = ?
+                    """, Boolean.class, uiResult.path("occurredAt").asText(), uiEventPublicId);
+            assertThat(uiOccurredAtMatches).isTrue();
         } finally {
             deleteDirectory(temporaryDirectory);
         }
