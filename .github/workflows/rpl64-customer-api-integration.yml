@@ -103,7 +103,7 @@ jobs:
                       root = ET.parse(report).getroot()
                   except ET.ParseError:
                       continue
-                  suites = [root] if root.tag == "testsuite" else root.findall(".//testsuite")
+                  suites = list(root.iter("testsuite"))
                   for suite in suites:
                       streams = [suite.findtext("system-err"), suite.findtext("system-out")]
                       for test_case in suite.findall("testcase"):
