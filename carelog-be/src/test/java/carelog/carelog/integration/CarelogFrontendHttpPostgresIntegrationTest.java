@@ -98,14 +98,13 @@ class CarelogFrontendHttpPostgresIntegrationTest {
             if (!playwright.waitFor(6, TimeUnit.MINUTES)) {
                 playwright.destroyForcibly().waitFor(10, TimeUnit.SECONDS);
                 String timedOutOutput = redactPlaywrightDiagnostics(readTextIfPresent(playwrightLog));
-                fail("The FE Playwright request timed out.\n"
-                        + diagnosticTail(timedOutOutput));
+                printPlaywrightDiagnostics(timedOutOutput);
+                fail("The FE Playwright request timed out; see bounded diagnostics above.");
             }
 
             String playwrightOutput = redactPlaywrightDiagnostics(readTextIfPresent(playwrightLog));
             if (playwright.exitValue() != 0) {
-                System.err.println("RPL-64 sanitized Playwright failure output (tail):\n"
-                        + diagnosticTail(playwrightOutput));
+                printPlaywrightDiagnostics(playwrightOutput);
                 fail("The FE browser test failed; see the sanitized tail above.");
             }
             System.out.println(diagnosticTail(playwrightOutput));
@@ -296,6 +295,12 @@ class CarelogFrontendHttpPostgresIntegrationTest {
 
     private static String diagnosticTail(String output) {
         return output.length() <= 24_000 ? output : output.substring(output.length() - 24_000);
+    }
+
+    private static void printPlaywrightDiagnostics(String output) {
+        System.err.println("RPL64_PLAYWRIGHT_FAILURE_DIAGNOSTICS_BEGIN");
+        System.err.println(diagnosticTail(output));
+        System.err.println("RPL64_PLAYWRIGHT_FAILURE_DIAGNOSTICS_END");
     }
 
     private static void deleteDirectory(Path directory) throws IOException {
