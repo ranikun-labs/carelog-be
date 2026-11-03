@@ -228,7 +228,7 @@ async function rpl64LoginThroughUi(page, account, password) {
   await page.locator('[data-auth-form] input[name="account"]').fill(account);
   await page.locator('[data-auth-form] input[name="secret"]').fill(password);
   const responsePromise = rpl64WaitForApiResponse(page, 'POST', '/api/v1/auth/login');
-  await page.getByRole('button', { name: '로그인', exact: true }).click();
+  await page.locator('[data-auth-form-mode="login"] [data-auth-form] button[type="submit"]').click();
   const response = await responsePromise;
   expect(response.status()).toBe(200);
   await expect(page.locator('[data-app-shell]')).toBeVisible();
