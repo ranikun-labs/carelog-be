@@ -35,3 +35,75 @@ jobs:
             --tests carelog.gateway.ratelimit.OAuthFailClosedRateLimiterTest \
             --tests carelog.gateway.route.OAuthGatewayRouteIntegrationTest \
             --tests carelog.gateway.route.OAuthGatewayRedisConnectionFailureRouteTest
+
+      - name: Summarize OAuth test failure causes (redacted)
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import glob
+          import re
+          import sys
+          import xml.etree.ElementTree as ET
+
+          reports = sorted(glob.glob("carelog-gateway/build/test-results/test/TEST-*.xml"))
+          if not reports:
+              print("oauth_junit_summary=no_xml_reports")
+              sys.exit(0)
+
+          def redact(value):
+              text = str(value or "")
+              patterns = [
+                  (r"(?i)\bBearer\s+\S+", "Bearer <redacted>"),
+                  (r"(?i)\b[\w.-]*(?:secret|password|token|credential|authorization|api[_-]?key)[\w.-]*\s*[:=]\s*(?:\"[^\"]*\"|'[^']*'|[^\s,;]+)", "<sensitive-assignment>"),
+                  (r"(?i)\b[\w-]*(?:secret|password|token|credential|api[_-]?key)[\w-]*\b", "<sensitive-like>"),
+                  (r"\b[A-Za-z0-9_-]{18,}\.[A-Za-z0-9_-]{18,}\.[A-Za-z0-9_-]{8,}\b", "<jwt-redacted>"),
+                  (r"https?://[^\s)<>]+", "<url-redacted>"),
+                  (r"(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?![\w.])", "<ip-redacted>"),
+                  (r"(?<![\w])[A-Fa-f0-9]{32,}(?![\w])", "<hex-redacted>"),
+                  (r"\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b", "<email-redacted>"),
+                  (r"(?<!\w)[A-Za-z0-9.-]+:\d{2,5}(?!\w)", "<host-port-redacted>"),
+              ]
+              for pattern, replacement in patterns:
+                  text = re.sub(pattern, replacement, text)
+              return text[:240]
+
+          exception_line = re.compile(
+              r"^\s*(?:Caused by:\s*)?"
+              r"([\w.$]+(?:Exception|Error|Failure|Throwable))"
+              r"(?::\s*(.*))?$"
+          )
+          failures = []
+          parse_errors = 0
+          for report in reports:
+              try:
+                  root = ET.parse(report).getroot()
+              except ET.ParseError:
+                  parse_errors += 1
+                  continue
+              for testcase in root.iter("testcase"):
+                  for kind in ("failure", "error"):
+                      node = testcase.find(kind)
+                      if node is not None:
+                          failures.append((testcase, node))
+
+          print(f"oauth_junit_parse_errors={parse_errors}")
+          print(f"oauth_junit_failures={len(failures)}")
+          for testcase, node in failures[:20]:
+              identity = f"{testcase.get('classname', '<class>')}#{testcase.get('name', '<test>')}"
+              print(f"failed_test={redact(identity)}")
+              exception_type = node.get("type") or "TestFailure"
+              message = node.get("message", "")
+              print(f"cause[0]={redact(exception_type)}: {redact(message)}")
+              causes = []
+              for line in (node.text or "").splitlines():
+                  match = exception_line.match(line.strip())
+                  if match:
+                      cause = f"{match.group(1)}: {match.group(2) or ''}".rstrip()
+                      if not causes or causes[-1] != cause:
+                          causes.append(cause)
+              for index, cause in enumerate(causes[:8], start=1):
+                  print(f"cause[{index}]={redact(cause)}")
+              if not causes:
+                  print("cause_chain=unavailable_in_junit_xml")
+          PY
