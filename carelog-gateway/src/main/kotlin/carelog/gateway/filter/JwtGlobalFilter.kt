@@ -17,7 +17,7 @@ class JwtGlobalFilter(
     private val jwtVerifier: JwtVerifier,
     private val blacklistService: RedisBlacklistService,
     private val gatewayConfig: GatewayConfig,
-    private val oauthPublicRequestMatcher: OAuthPublicRequestMatcher
+    private val oauthPublicRequestMatcher: OAuthPublicRequestMatcher = OAuthPublicRequestMatcher()
 ) : GlobalFilter, Ordered {
 
     private val publicPaths get() = gatewayConfig.publicPaths

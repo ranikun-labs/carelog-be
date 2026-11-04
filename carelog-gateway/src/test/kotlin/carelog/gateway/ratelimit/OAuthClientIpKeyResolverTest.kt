@@ -13,9 +13,9 @@ class OAuthClientIpKeyResolverTest {
     @Test
     fun `uses the address appended by the configured trusted proxy instead of the first XFF value`() {
         val resolver = OAuthClientIpKeyResolver(OAuthRateLimitConfig(trustedProxyHops = 1))
-        val exchange = exchange(xForwardedFor = "198.51.100.17, 10.10.0.8")
+        val exchange = exchange(xForwardedFor = "192.0.2.17, 198.51.100.8")
 
-        assertThat(resolver.resolve(exchange).block()).isEqualTo("10.10.0.8")
+        assertThat(resolver.resolve(exchange).block()).isEqualTo("198.51.100.8")
     }
 
     @Test
