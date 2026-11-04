@@ -27,9 +27,10 @@ import org.testcontainers.utility.DockerImageName
         "JWT_SECRET_KEY=test-jwt-secret-key-that-is-long-enough-for-hmac-sha"
     ]
 )
-class OAuthGatewayRedisConnectionFailureRouteTest(
-    @Autowired private val webTestClient: WebTestClient
-) {
+class OAuthGatewayRedisConnectionFailureRouteTest {
+
+    @field:Autowired
+    private lateinit var webTestClient: WebTestClient
 
     @Test
     fun `real Valkey outage on OAuth route returns 503 without calling Carelog BE`() {
