@@ -29,9 +29,12 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Set validated Docker Java API compatibility for hosted Docker 29
+        run: printf 'api.version=1.44\n' > "$HOME/.docker-java.properties"
+
       - name: Run targeted OAuth rate limiter tests
         run: |
-          ./gradlew :carelog-gateway:test --no-daemon --stacktrace --console=plain \
+          ./gradlew :carelog-gateway:test --no-daemon --console=plain \
             --tests carelog.gateway.ratelimit.OAuthFailClosedRateLimiterTest \
             --tests carelog.gateway.route.OAuthGatewayRouteIntegrationTest \
             --tests carelog.gateway.route.OAuthGatewayRedisConnectionFailureRouteTest
