@@ -3,7 +3,6 @@ package carelog.gateway.route
 import carelog.gateway.CarelogGatewayApplication
 import com.sun.net.httpserver.HttpServer
 import java.net.InetSocketAddress
-import java.time.Duration
 import java.util.concurrent.atomic.AtomicInteger
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterAll
@@ -11,8 +10,6 @@ import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient
 import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.data.redis.connection.ReactiveRedisConnectionFactory
-import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory
 import org.springframework.http.HttpStatus
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
@@ -31,20 +28,14 @@ import org.testcontainers.utility.DockerImageName
     ]
 )
 class OAuthGatewayRedisConnectionFailureRouteTest(
-    @Autowired private val webTestClient: WebTestClient,
-    @Autowired private val redisConnectionFactory: ReactiveRedisConnectionFactory
+    @Autowired private val webTestClient: WebTestClient
 ) {
 
     @Test
     fun `real Valkey outage on OAuth route returns 503 without calling Carelog BE`() {
-        assertThat(redisConnectionFactory).isInstanceOf(LettuceConnectionFactory::class.java)
-
-        val connection = redisConnectionFactory.reactiveConnection
-        try {
-            assertThat(connection.serverCommands().ping().block(Duration.ofSeconds(5))).isEqualTo("PONG")
-        } finally {
-            connection.close().block(Duration.ofSeconds(1))
-        }
+        val ping = valkey.execInContainer("valkey-cli", "PING")
+        assertThat(ping.exitCode).isZero()
+        assertThat(ping.stdout.trim()).isEqualTo("PONG")
 
         valkey.stop()
         assertThat(valkey.isRunning).isFalse()
@@ -66,7 +57,9 @@ class OAuthGatewayRedisConnectionFailureRouteTest(
             DockerImageName.parse(
                 "valkey/valkey:8.1.0-alpine@sha256:93df46243b1d033a2d8f3ffc34122c6e431fbb315c5cff246ce6f77cf5a09f5b"
             )
-        ).withExposedPorts(6379)
+        ).apply {
+            withExposedPorts(6379)
+        }
         val upstreamRequestCount = AtomicInteger()
         private val upstreamServer = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
             createContext("/") { exchange ->
