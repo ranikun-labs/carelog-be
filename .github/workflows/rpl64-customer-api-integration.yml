@@ -76,24 +76,26 @@ jobs:
         working-directory: carelog-fe
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Run Customer and CustomerEvent PostgreSQL tests plus real FE HTTP readback
+      - name: Run Customer and CustomerEvent PostgreSQL tests without FE inputs
+        run: |
+          ./gradlew :carelog-be:test \
+            --tests 'carelog.carelog.customer.CustomerProductApiIntegrationTest' \
+            --tests 'carelog.carelog.customerevent.CustomerEventProductApiIntegrationTest' \
+            --no-daemon --stacktrace --console=plain
+
+      - name: Run dedicated RPL-64 FE HTTP/PostgreSQL integration tests
         env:
           CARELOG_FE_ROOT: ${{ github.workspace }}/carelog-fe
         run: |
           set +e
-          ./gradlew :carelog-be:test \
-            --tests 'carelog.carelog.customer.CustomerProductApiIntegrationTest' \
-            --tests 'carelog.carelog.customerevent.CustomerEventProductApiIntegrationTest' \
-            --tests 'carelog.carelog.integration.CarelogFrontendHttpPostgresIntegrationTest' \
-            --no-daemon --stacktrace --console=plain
+          ./gradlew :carelog-be:rpl64FeHttpTest --no-daemon --stacktrace --console=plain
           test_exit=$?
 
           python3 - <<'PY'
           from pathlib import Path
-          import sys
           import xml.etree.ElementTree as ET
 
-          reports = Path("carelog-be/build/test-results/test")
+          reports = Path("carelog-be/build/test-results/rpl64FeHttpTest")
           begin = "RPL64_PLAYWRIGHT_FAILURE_DIAGNOSTICS_BEGIN"
           end = "RPL64_PLAYWRIGHT_FAILURE_DIAGNOSTICS_END"
           found = False

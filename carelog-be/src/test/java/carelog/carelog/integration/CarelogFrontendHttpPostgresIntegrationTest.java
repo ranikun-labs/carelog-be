@@ -5,6 +5,7 @@ import carelog.carelog.PostgreSqlTestContainerConfiguration;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -39,6 +40,7 @@ import static org.junit.jupiter.api.Assertions.fail;
         properties = "server.address=127.0.0.1")
 @ActiveProfiles("test")
 @Import(PostgreSqlTestContainerConfiguration.class)
+@Tag("rpl64-fe-http")
 class CarelogFrontendHttpPostgresIntegrationTest {
 
     @LocalServerPort

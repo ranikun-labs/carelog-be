@@ -117,6 +117,24 @@ test('the FE production Customer and CustomerEvent adapters reach BE HTTP with s
       to: input.eventListTo,
       limit: 100,
     });
+    const getStatus = async (request) => {
+      try {
+        await request();
+        return 200;
+      } catch (error) {
+        return error?.status ?? -1;
+      }
+    };
+    const foreignCustomerDetailStatus = await getStatus(
+      () => otherOrganizationPorts.customerPort.get(created.id),
+    );
+    const foreignCustomerEditStatus = await getStatus(
+      () => otherOrganizationPorts.customerPort.edit(created.id, detailedCustomer, {
+        displayName: 'RPL-64 forbidden cross-organization edit',
+        customerMemo: 'rpl64-forbidden-cross-organization-edit',
+      }),
+    );
+    const customerAfterForeignEdit = await organizationPorts.customerPort.get(created.id);
 
     return {
       id: created.id,
@@ -130,6 +148,10 @@ test('the FE production Customer and CustomerEvent adapters reach BE HTTP with s
       createdListedDisplayName: listed.displayName,
       listedDisplayName: listedEditedCustomer.displayName,
       listedCustomerMemo: listedEditedCustomer.customerMemo,
+      foreignCustomerDetailStatus,
+      foreignCustomerEditStatus,
+      customerAfterForeignEditDisplayName: customerAfterForeignEdit.displayName,
+      customerAfterForeignEditMemo: customerAfterForeignEdit.customerMemo,
       visibleInOtherOrganization: otherOrganizationRows.some((row) => row.id === created.id),
       eventId: createdEvent.id,
       eventCustomerId: createdEvent.customerId,
@@ -180,6 +202,10 @@ test('the FE production Customer and CustomerEvent adapters reach BE HTTP with s
   expect(result.createdListedDisplayName).toBe(displayName);
   expect(result.listedDisplayName).toBe(updatedDisplayName);
   expect(result.listedCustomerMemo).toBe(updatedCustomerMemo);
+  expect(result.foreignCustomerDetailStatus).toBe(404);
+  expect(result.foreignCustomerEditStatus).toBe(404);
+  expect(result.customerAfterForeignEditDisplayName).toBe(updatedDisplayName);
+  expect(result.customerAfterForeignEditMemo).toBe(updatedCustomerMemo);
   expect(result.visibleInOtherOrganization).toBe(false);
   expect(result.eventCustomerId).toBe(result.id);
   expect(result.eventCreatedStatus).toBe('PLANNED');

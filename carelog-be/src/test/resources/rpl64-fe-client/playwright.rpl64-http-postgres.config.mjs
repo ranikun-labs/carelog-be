@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import { execFileSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -7,6 +8,23 @@ const backendTarget = process.env.CARELOG_RPL64_BE_TARGET?.trim();
 
 if (!frontendRoot || !backendTarget) {
   throw new Error('The RPL-64 HTTP/PostgreSQL test requires frontend and backend loopback targets.');
+}
+
+const expectedFrontendSha = '190c70564df5261b9a711b8e23cd7b457bbccbc9';
+let actualFrontendSha;
+try {
+  actualFrontendSha = execFileSync('git', ['-C', frontendRoot, 'rev-parse', 'HEAD'], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }).trim();
+} catch (error) {
+  actualFrontendSha = process.env.CARELOG_RPL64_FE_SOURCE_SHA;
+  if (!actualFrontendSha) {
+    throw new Error(`The RPL-64 test could not read the FE source SHA from CARELOG_FE_ROOT: ${error.message}`);
+  }
+}
+if (actualFrontendSha !== expectedFrontendSha) {
+  throw new Error(`The RPL-64 HTTP/PostgreSQL test requires FE source ${expectedFrontendSha}; got ${actualFrontendSha}.`);
 }
 
 const backendUrl = new URL(backendTarget);
