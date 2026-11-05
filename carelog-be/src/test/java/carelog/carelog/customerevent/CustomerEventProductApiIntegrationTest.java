@@ -12,13 +12,16 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
-import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
+import java.util.Map;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
@@ -42,8 +45,12 @@ class CustomerEventProductApiIntegrationTest {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    // No outer @Transactional: controller requests commit through their service transaction;
+    // JdbcTemplate assertions read outside the JPA persistence context.
     @Test
-    @Transactional
     @DisplayName("CustomerEvent API는 canonical lifecycle, ownership, bounded list와 PATCH wire contract를 보존한다")
     void customerEventApi_preservesCanonicalContract() throws Exception {
         UUID organizationA = UUID.randomUUID();
@@ -84,6 +91,9 @@ class CustomerEventProductApiIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
 
         String eventId = com.jayway.jsonpath.JsonPath.read(createBody, "$.data.id");
+        UUID eventPublicId = UUID.fromString(eventId);
+        assertEventRow(eventPublicId, organizationA, customerA.getPublicId(), "PLANNED", "초기 메모");
+        assertScheduledAt(eventPublicId, "2026-08-20T10:00:00+09:00");
 
         mockMvc.perform(withManager(get("/customer-events/" + eventId), organizationA))
                 .andExpect(status().isOk())
@@ -133,6 +143,23 @@ class CustomerEventProductApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.descriptor").doesNotExist())
                 .andExpect(jsonPath("$.data.note").value("초기 메모"));
+        assertEventRow(eventPublicId, organizationA, customerA.getPublicId(), "PLANNED", "초기 메모");
+
+        // PLANNED event reschedule은 API 응답뿐 아니라 독립 JDBC 조회에서도 확인한다.
+        mockMvc.perform(withManager(patch("/customer-events/" + eventId), organizationA)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"scheduledAt\":\"2026-08-20T10:15:00+09:00\",\"note\":\"재예약 메모\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.scheduledAt").value("2026-08-20T10:15:00+09:00"))
+                .andExpect(jsonPath("$.data.note").value("재예약 메모"));
+        String rescheduledGetBody = mockMvc.perform(withManager(get("/customer-events/" + eventId), organizationA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.note").value("재예약 메모"))
+                .andReturn().getResponse().getContentAsString();
+        assertTimestampInstant(
+                rescheduledGetBody, "$.data.scheduledAt", "2026-08-20T10:15:00+09:00");
+        assertEventRow(eventPublicId, organizationA, customerA.getPublicId(), "PLANNED", "재예약 메모");
+        assertScheduledAt(eventPublicId, "2026-08-20T10:15:00+09:00");
 
         // PLANNED lifecycle에서 occurredAt 직접 수정과 scheduledAt clear는 거부한다.
         mockMvc.perform(withManager(patch("/customer-events/" + eventId), organizationA)
@@ -144,13 +171,25 @@ class CustomerEventProductApiIntegrationTest {
                         .content("{\"scheduledAt\":null}"))
                 .andExpect(status().isBadRequest());
 
-        mockMvc.perform(withManager(post("/customer-events/" + eventId + "/occur"), organizationA)
+        String occurredBody = mockMvc.perform(withManager(post("/customer-events/" + eventId + "/occur"), organizationA)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"occurredAt\":\"2026-08-20T10:30:00+09:00\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("OCCURRED"))
-                .andExpect(jsonPath("$.data.scheduledAt").value("2026-08-20T10:00:00+09:00"))
-                .andExpect(jsonPath("$.data.occurredAt").value("2026-08-20T10:30:00+09:00"));
+                .andExpect(jsonPath("$.data.occurredAt").value("2026-08-20T10:30:00+09:00"))
+                .andReturn().getResponse().getContentAsString();
+        assertTimestampInstant(occurredBody, "$.data.scheduledAt", "2026-08-20T10:15:00+09:00");
+        String occurredGetBody = mockMvc.perform(withManager(get("/customer-events/" + eventId), organizationA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("OCCURRED"))
+                .andReturn().getResponse().getContentAsString();
+        assertTimestampInstant(
+                occurredGetBody, "$.data.scheduledAt", "2026-08-20T10:15:00+09:00");
+        assertTimestampInstant(
+                occurredGetBody, "$.data.occurredAt", "2026-08-20T10:30:00+09:00");
+        assertEventRow(eventPublicId, organizationA, customerA.getPublicId(), "OCCURRED", "재예약 메모");
+        assertScheduledAt(eventPublicId, "2026-08-20T10:15:00+09:00");
+        assertOccurredAt(eventPublicId, "2026-08-20T10:30:00+09:00");
 
         mockMvc.perform(withManager(post("/customer-events/" + eventId + "/cancel"), organizationA))
                 .andExpect(status().isConflict());
@@ -161,10 +200,11 @@ class CustomerEventProductApiIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"note\":\"침범\"}"))
                 .andExpect(status().isNotFound());
+        assertEventRow(eventPublicId, organizationA, customerA.getPublicId(), "OCCURRED", "재예약 메모");
+        assertOccurredAt(eventPublicId, "2026-08-20T10:30:00+09:00");
     }
 
     @Test
-    @Transactional
     @DisplayName("CustomerEvent 요청 본문이 JSON null이면 500 대신 잘못된 요청으로 거부한다")
     void requestBodies_null_returnBadRequest() throws Exception {
         UUID organizationId = UUID.randomUUID();
@@ -237,7 +277,6 @@ class CustomerEventProductApiIntegrationTest {
     }
 
     @Test
-    @Transactional
     @DisplayName("immediate OCCURRED와 CANCELLED 성공 surface를 직접 제공한다")
     void lifecycleCreationAndCancellation_succeed() throws Exception {
         UUID organizationId = UUID.randomUUID();
@@ -270,15 +309,25 @@ class CustomerEventProductApiIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
         String plannedEventId = com.jayway.jsonpath.JsonPath.read(plannedBody, "$.data.id");
 
-        mockMvc.perform(withManager(post("/customer-events/" + plannedEventId + "/cancel"), organizationId))
+        UUID plannedPublicId = UUID.fromString(plannedEventId);
+        assertEventRow(plannedPublicId, organizationId, customer.getPublicId(), "PLANNED", null);
+        assertScheduledAt(plannedPublicId, "2026-08-20T10:00:00+09:00");
+
+        String cancellationBody = mockMvc.perform(withManager(post("/customer-events/" + plannedEventId + "/cancel"), organizationId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("CANCELLED"))
-                .andExpect(jsonPath("$.data.scheduledAt").value("2026-08-20T10:00:00+09:00"))
-                .andExpect(jsonPath("$.data.occurredAt").doesNotExist());
+                .andExpect(jsonPath("$.data.occurredAt").doesNotExist())
+                .andReturn().getResponse().getContentAsString();
+        assertTimestampInstant(
+                cancellationBody, "$.data.scheduledAt", "2026-08-20T10:00:00+09:00");
+        mockMvc.perform(withManager(get("/customer-events/" + plannedEventId), organizationId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("CANCELLED"));
+        assertEventRow(plannedPublicId, organizationId, customer.getPublicId(), "CANCELLED", null);
+        assertScheduledAt(plannedPublicId, "2026-08-20T10:00:00+09:00");
     }
 
     @Test
-    @Transactional
     @DisplayName("foreign Customer와 Event는 모든 보강 surface에서 404로 은닉한다")
     void foreignOwnership_isConcealedAcrossCreateListOccurAndCancel() throws Exception {
         UUID organizationA = UUID.randomUUID();
@@ -325,6 +374,73 @@ class CustomerEventProductApiIntegrationTest {
                 .andExpect(status().isNotFound());
         mockMvc.perform(withManager(post("/customer-events/" + foreignEventId + "/cancel"), organizationA))
                 .andExpect(status().isNotFound());
+        UUID foreignEventPublicId = UUID.fromString(foreignEventId);
+        assertEventRow(foreignEventPublicId, organizationB, foreignCustomer.getPublicId(), "PLANNED", null);
+        assertScheduledAt(foreignEventPublicId, "2026-08-20T10:00:00+09:00");
+    }
+
+    @Test
+    @DisplayName("Gateway Secret이 없으면 403이고 사용자 식별이 없으면 401로 CustomerEvent API를 차단한다")
+    void gatewayAuthenticationFailures_return403And401() throws Exception {
+        UUID organizationId = UUID.randomUUID();
+
+        mockMvc.perform(get("/customer-events")
+                        .param("customerId", UUID.randomUUID().toString())
+                        .param("limit", "1")
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .header("X-Organization-Id", organizationId.toString())
+                        .header("X-Role", "MANAGER")
+                        .header("X-Public-Id", UUID.randomUUID().toString()))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(withoutUserHeader(
+                        get("/customer-events")
+                                .param("customerId", UUID.randomUUID().toString())
+                                .param("limit", "1"), organizationId))
+                .andExpect(status().isUnauthorized());
+    }
+
+    private void assertEventRow(
+            UUID eventId, UUID organizationId, UUID customerPublicId, String status, String note) {
+        Map<String, Object> row = jdbcTemplate.queryForMap("""
+                select event.organization_id, event.status, event.note,
+                       customer.public_id as customer_public_id
+                from customer_events event
+                join users customer on customer.id = event.customer_id
+                where event.public_id = ?
+                """, eventId);
+        assertThat(row.get("organization_id")).isEqualTo(organizationId);
+        assertThat(row.get("customer_public_id")).isEqualTo(customerPublicId);
+        assertThat(row.get("status")).isEqualTo(status);
+        if (note == null) {
+            assertThat(row.get("note")).isNull();
+        } else {
+            assertThat(row.get("note")).isEqualTo(note);
+        }
+    }
+
+    private void assertScheduledAt(UUID eventId, String timestamp) {
+        Boolean matches = jdbcTemplate.queryForObject("""
+                select scheduled_at = cast(? as timestamptz)
+                from customer_events
+                where public_id = ?
+                """, Boolean.class, timestamp, eventId);
+        assertThat(matches).isTrue();
+    }
+
+    private void assertOccurredAt(UUID eventId, String timestamp) {
+        Boolean matches = jdbcTemplate.queryForObject("""
+                select occurred_at = cast(? as timestamptz)
+                from customer_events
+                where public_id = ?
+                """, Boolean.class, timestamp, eventId);
+        assertThat(matches).isTrue();
+    }
+
+    private void assertTimestampInstant(String responseBody, String jsonPath, String expectedTimestamp) {
+        String actualTimestamp = com.jayway.jsonpath.JsonPath.read(responseBody, jsonPath);
+        assertThat(OffsetDateTime.parse(actualTimestamp).toInstant())
+                .isEqualTo(OffsetDateTime.parse(expectedTimestamp).toInstant());
     }
 
     private User saveCustomer(UUID organizationId, String name) {
@@ -336,6 +452,15 @@ class CustomerEventProductApiIntegrationTest {
     private MockHttpServletRequestBuilder withManager(
             MockHttpServletRequestBuilder request, UUID organizationId) {
         return withRole(request, organizationId, "MANAGER");
+    }
+
+    private MockHttpServletRequestBuilder withoutUserHeader(
+            MockHttpServletRequestBuilder request, UUID organizationId) {
+        return request
+                .header("X-Gateway-Secret", GATEWAY_SECRET)
+                .header("X-Organization-Id", organizationId.toString())
+                .header("X-Role", "MANAGER")
+                .header("X-Public-Id", UUID.randomUUID().toString());
     }
 
     private MockHttpServletRequestBuilder withRole(
