@@ -39,8 +39,8 @@ dependencies {
     testImplementation 'org.springframework.security:spring-security-test'
     testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'
-    testImplementation 'org.testcontainers:testcontainers'
-    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'org.testcontainers:testcontainers:1.21.4'
+    testImplementation 'org.testcontainers:postgresql:1.21.4'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
     // ArchUnit: Auth 내부 경계(Port/Adapter/Application) 의존 규칙을 테스트로 고정
