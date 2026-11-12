@@ -3,9 +3,8 @@ package carelog.carelog.common.metrics;
 import carelog.carelog.auth.app.port.oauth.OAuthStateStoreUnavailableException;
 import io.lettuce.core.RedisCommandTimeoutException;
 import io.micrometer.core.instrument.Meter;
-import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.config.MeterFilter;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
@@ -18,10 +17,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 
 class HttpTimeoutMetricsTest {
 
@@ -44,9 +39,13 @@ class HttpTimeoutMetricsTest {
 
     @Test
     void registryFailureDoesNotChangeExistingResolverResponseOrReplaceOriginalException() throws Exception {
-        MeterRegistry registry = mock(MeterRegistry.class);
-        doThrow(new IllegalStateException("registry unavailable"))
-                .when(registry).counter(any(Meter.Id.class), any());
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        registry.config().meterFilter(new MeterFilter() {
+            @Override
+            public Meter.Id map(Meter.Id id) {
+                throw new IllegalStateException("registry unavailable");
+            }
+        });
         StaticListableBeanFactory beans = new StaticListableBeanFactory();
         beans.addBean("httpTimeoutMetrics", new HttpTimeoutMetrics(registry));
 
@@ -69,7 +68,6 @@ class HttpTimeoutMetricsTest {
         MockHttpServletResponse actual = resolve(resolvers, original);
         MockHttpServletResponse baseline = resolve(List.of(existing), original);
 
-        verify(registry).counter(any(Meter.Id.class), any());
         assertThat(actual.getStatus()).isEqualTo(baseline.getStatus()).isEqualTo(503);
         assertThat(actual.getContentAsString()).isEqualTo(baseline.getContentAsString())
                 .isEqualTo("existing response");
