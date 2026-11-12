@@ -66,6 +66,8 @@ _NO_REDIRECT_OPENER = build_opener(ProxyHandler({}), _NoRedirect())
 
 def get(base: str, path: str, bearer: str | None = None,
         extra_headers: dict[str, str] | None = None) -> HttpResult:
+    if bearer is not None and ("\r" in bearer or "\n" in bearer):
+        raise ValueError("Synthetic bearer tokens must not contain line breaks")
     headers = {"Accept": "application/json"}
     if bearer is not None:
         headers["Authorization"] = "Bearer " + bearer
@@ -206,9 +208,9 @@ def main() -> int:
         print(json.dumps({"verdict": "FAIL", "reason": "Unexpected Customer response contract"},
                          ensure_ascii=False))
         return 1
-    except (ValueError, RuntimeError) as error:
+    except (ValueError, RuntimeError):
         # Avoid echoing endpoint response bodies, tokens, URL credentials, or secrets.
-        print(json.dumps({"verdict": "BLOCKED", "reason": str(error)},
+        print(json.dumps({"verdict": "BLOCKED", "reason": "Invalid non-production smoke inputs or unavailable loopback runtime"},
                          ensure_ascii=False))
         return 2
 

@@ -139,6 +139,30 @@ class NonprodSmokeTests(unittest.TestCase):
         self.assertEqual(payload["full_g4_e2e"], "NOT_VERIFIED")
         self.assertNotIn("synthetic-token", output.getvalue())
 
+    def test_expired_token_with_line_break_is_blocked_without_disclosure(self):
+        self._assert_optional_token_with_line_break_is_not_disclosed("G4_EXPIRED_ACCESS_TOKEN")
+
+    def test_revoked_token_with_line_break_is_blocked_without_disclosure(self):
+        self._assert_optional_token_with_line_break_is_not_disclosed("G4_REVOKED_ACCESS_TOKEN")
+
+    def _assert_optional_token_with_line_break_is_not_disclosed(self, token_environment):
+        canary = "synthetic-confidential-marker"
+        for separator in ("\r", "\n"):
+            with self.subTest(separator=repr(separator)), patch.dict(os.environ, {
+                "G4_NONPROD_ACK": "YES_NONPROD_ONLY",
+                "G4_GATEWAY_URL": self.url,
+                "G4_MANAGER_ACCESS_TOKEN": "synthetic-token",
+                token_environment: canary + separator + "malformed",
+            }, clear=True):
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output):
+                    code = smoke.main()
+                payload = json.loads(output.getvalue())
+                self.assertEqual(code, 2)
+                self.assertEqual(payload["verdict"], "BLOCKED")
+                self.assertNotIn(canary, output.getvalue())
+                self.assertNotIn("malformed", output.getvalue())
+
 
     def test_foreign_customer_must_be_visible_to_owning_user_first(self):
         from uuid import UUID
