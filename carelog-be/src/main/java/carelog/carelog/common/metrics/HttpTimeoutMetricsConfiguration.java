@@ -10,7 +10,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
 
-/** 기존 예외 Resolver의 응답 처리를 바꾸지 않고 실제 Throwable을 먼저 관측한다. */
+/** 기존 예외 Resolver의 응답 처리를 바꾸지 않고 실제 Throwable을 먼저 관측한다. 지표 오류는 예외 처리를 막지 않는다. */
 @Configuration(proxyBeanMethods = false)
 public class HttpTimeoutMetricsConfiguration implements WebMvcConfigurer {
 
@@ -26,7 +26,11 @@ public class HttpTimeoutMetricsConfiguration implements WebMvcConfigurer {
             @Override
             public ModelAndView resolveException(HttpServletRequest request, HttpServletResponse response,
                                                  Object handler, Exception exception) {
-                timeoutMetricsProvider.ifAvailable(metrics -> metrics.recordIfTimeout(request, exception));
+                try {
+                    timeoutMetricsProvider.ifAvailable(metrics -> metrics.recordIfTimeout(request, exception));
+                } catch (RuntimeException ignored) {
+                    // Observability is best-effort; preserve the original exception for the next resolver.
+                }
                 return null;
             }
         });
