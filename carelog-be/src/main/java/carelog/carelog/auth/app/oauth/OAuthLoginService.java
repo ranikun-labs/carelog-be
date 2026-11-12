@@ -23,8 +23,11 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class OAuthLoginService {
 
+    private static final int PUBLIC_STATE_LENGTH = 43;
+
     private final OAuthProviderRegistry providerRegistry;
     private final OAuthStateStore stateStore;
+    private final OAuthStateBindingVerifier stateBindingVerifier;
     private final ExternalIdentityLookupPort externalIdentityLookupPort;
     private final CRMIdentityProjectionPort crmIdentityProjectionPort;
     private final AuthTokenIssuanceService authTokenIssuanceService;
@@ -32,8 +35,11 @@ public class OAuthLoginService {
     public OAuthLoginResult completeLogin(OAuthCallbackCommand command) {
         OAuthProviderPort provider = providerRegistry.resolve(command.provider());
         String providerCode = OAuthProviderRegistry.normalize(provider.providerCode());
+        if (!isCanonicalPublicState(command.state())) {
+            return new OAuthLoginResult.InvalidOrExpiredState();
+        }
         Optional<OAuthStateRecord> state = stateStore.consume(command.state());
-        if (state.isEmpty() || !providerCode.equals(OAuthProviderRegistry.normalize(state.get().provider()))) {
+        if (state.isEmpty() || !stateBindingVerifier.verify(providerCode, state.get())) {
             return new OAuthLoginResult.InvalidOrExpiredState();
         }
 
@@ -78,5 +84,17 @@ public class OAuthLoginService {
                 ))
                 .orElseGet(() -> new OAuthLoginResult.ExternalIdentityConflict(
                         OAuthLoginResult.ConflictReason.ORPHANED_IDENTITY));
+    }
+
+    private static boolean isCanonicalPublicState(String state) {
+        if (state == null || state.length() != PUBLIC_STATE_LENGTH) {
+            return false;
+        }
+        return state.chars().allMatch(character ->
+                character >= 'A' && character <= 'Z'
+                        || character >= 'a' && character <= 'z'
+                        || character >= '0' && character <= '9'
+                        || character == '_'
+                        || character == '-');
     }
 }

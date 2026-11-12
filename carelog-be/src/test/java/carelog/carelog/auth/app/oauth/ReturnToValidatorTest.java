@@ -3,6 +3,10 @@ package carelog.carelog.auth.app.oauth;
 import carelog.carelog.common.web.exception.CustomException;
 import carelog.carelog.common.web.exception.ExceptionStatus;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EmptySource;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.List;
 
@@ -13,37 +17,59 @@ class ReturnToValidatorTest {
 
     private final ReturnToValidator validator = new ReturnToValidator(List.of("https://app.example.com:8443"));
 
-    @Test
-    void 상대경로와_정확히_일치하는_origin만_허용한다() {
-        assertThat(validator.validate("/journals/42")).isEqualTo("/journals/42");
-        assertThat(validator.validate("/journals/42?tab=notes&sort=recent"))
-                .isEqualTo("/journals/42?tab=notes&sort=recent");
-        assertThat(validator.validate("https://app.example.com:8443/onboarding"))
-                .isEqualTo("https://app.example.com:8443/onboarding");
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "/",
+            "/app",
+            "/customers",
+            "/customers/42",
+            "/customers/42?tab=notes&sort=recent"
+    })
+    void 안전한_ASCII_로컬_경로와_query는_원문을_보존한다(String returnTo) {
+        assertThat(validator.validate(returnTo)).isEqualTo(returnTo);
     }
 
     @Test
-    void protocol_relative_외부_origin_유사호스트와_javascript를_거부한다() {
-        assertInvalid("//evil.example.com");
-        assertInvalid("https://app.example.com/onboarding");
-        assertInvalid("https://app.example.com:8443.evil.example.com/onboarding");
-        assertInvalid("javascript:alert(1)");
-        assertInvalid("https://sub.app.example.com:8443/onboarding");
-        assertInvalid("https://app.example.com:9443/onboarding");
+    void 최대_길이_2048의_경로는_원문을_보존한다() {
+        String returnTo = "/" + "a".repeat(2047);
+
+        assertThat(validator.validate(returnTo)).isEqualTo(returnTo);
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @EmptySource
+    @ValueSource(strings = {
+            " ",
+            "customers",
+            "http://evil.example",
+            "https://evil.example",
+            "https://app.example.com:8443/onboarding",
+            "//evil.example",
+            "javascript:alert(1)",
+            "data:text/html,evil",
+            "/customers#details",
+            "/\\evil.example",
+            "/customers%",
+            "/customers%41",
+            "/customers/%2fadmin",
+            "/customers/%2e%2e/admin",
+            "/customers/./42",
+            "/customers/../admin",
+            "/patient list",
+            "/?q=a b",
+            "/customers\t42",
+            "/customers\r\nLocation:https://evil.example",
+            "/customers\u0000",
+            "/고객"
+    })
+    void path_only_계약을_벗어난_입력은_거부한다(String returnTo) {
+        assertInvalid(returnTo);
     }
 
     @Test
-    void network_path와_backslash_및_encoded_separator_우회를_거부한다() {
-        assertInvalid("/\\evil.example.com");
-        assertInvalid("/%5cevil.example.com");
-        assertInvalid("/%2fevil.example.com");
-        assertInvalid("//evil.example.com");
-    }
-
-    @Test
-    void 제어문자와_CRLF를_거부한다() {
-        assertInvalid("/journals/42\r\nLocation: https://evil.example.com");
-        assertInvalid("/journals/42\u0000");
+    void 최대_길이_2048을_초과하면_거부한다() {
+        assertInvalid("/" + "a".repeat(2048));
     }
 
     private void assertInvalid(String returnTo) {
