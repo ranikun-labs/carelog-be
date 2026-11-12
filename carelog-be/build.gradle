@@ -78,5 +78,50 @@ tasks.named('bootJar') {
 }
 
 tasks.named('test') {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        excludeTags 'rpl64-fe-http'
+    }
+}
+
+tasks.register('rpl64FeHttpTest', Test) {
+    description = 'Runs the RPL-64 FE production-adapter HTTP/PostgreSQL integration tests.'
+    group = 'verification'
+    dependsOn tasks.named('testClasses')
+    outputs.upToDateWhen { false }
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'rpl64-fe-http'
+    }
+    shouldRunAfter tasks.named('test')
+
+    doFirst {
+        def configuredFrontendRoot = System.getenv('CARELOG_FE_ROOT')
+        if (configuredFrontendRoot == null || configuredFrontendRoot.isBlank()) {
+            throw new GradleException('RPL-64 requires CARELOG_FE_ROOT pointing to the pinned Carelog FE checkout at 190c70564df5261b9a711b8e23cd7b457bbccbc9.')
+        }
+
+        def frontendRoot = file(configuredFrontendRoot).canonicalFile
+        if (!frontendRoot.isDirectory()) {
+            throw new GradleException("RPL-64 CARELOG_FE_ROOT is not a directory: ${frontendRoot}")
+        }
+        if (!new File(frontendRoot, 'node_modules').isDirectory()) {
+            throw new GradleException("RPL-64 FE dependencies are missing under ${frontendRoot}; run pnpm install for the pinned checkout.")
+        }
+
+        def expectedFrontendSha = '190c70564df5261b9a711b8e23cd7b457bbccbc9'
+        def gitProcess = new ProcessBuilder('git', '-C', frontendRoot.absolutePath, 'rev-parse', 'HEAD')
+                .redirectErrorStream(true)
+                .start()
+        def frontendSha = gitProcess.inputStream.getText('UTF-8').trim()
+        if (gitProcess.waitFor() != 0) {
+            frontendSha = System.getenv('CARELOG_RPL64_FE_SOURCE_SHA')
+        }
+        if (frontendSha == null || frontendSha.isBlank()) {
+            throw new GradleException("RPL-64 could not read the FE source SHA from ${frontendRoot}; provide a Git checkout or CARELOG_RPL64_FE_SOURCE_SHA for a verified source snapshot.")
+        }
+        if (frontendSha != expectedFrontendSha) {
+            throw new GradleException("RPL-64 requires FE source ${expectedFrontendSha}, but CARELOG_FE_ROOT is at ${frontendSha}.")
+        }
+    }
 }
