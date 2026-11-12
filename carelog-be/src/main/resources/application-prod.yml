@@ -54,6 +54,34 @@ springdoc:
     enabled: false
 
 management:
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      slo:
+        "http.server.requests":
+          - 25ms
+          - 50ms
+          - 100ms
+          - 250ms
+          - 500ms
+          - 1s
+          - 2500ms
+          - 5s
+          - 10s
+        "ranikun.db.query.duration":
+          - 1ms
+          - 5ms
+          - 10ms
+          - 25ms
+          - 50ms
+          - 100ms
+          - 250ms
+          - 500ms
+          - 1s
+    tags:
+      service: ${spring.application.name:carelog}
+      environment: ${CARELOG_ENVIRONMENT:production}
   server:
     port: ${CARELOG_MANAGEMENT_PORT:8081}
     address: 0.0.0.0
@@ -76,11 +104,6 @@ management:
       enabled: true
     readinessstate:
       enabled: true
-  metrics:
-    tags:
-      service: ${spring.application.name:carelog}
-      environment: ${CARELOG_ENVIRONMENT:production}
-
 logging:
   pattern:
     console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level service=${spring.application.name:carelog} env=${CARELOG_ENVIRONMENT:production} [%thread] %logger{36} - %msg%n%ex"
