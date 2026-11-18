@@ -41,6 +41,7 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'
     testImplementation 'org.testcontainers:testcontainers:1.21.4'
     testImplementation 'org.testcontainers:postgresql:1.21.4'
+    testImplementation 'io.micrometer:micrometer-registry-prometheus'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
     // ArchUnit: Auth 내부 경계(Port/Adapter/Application) 의존 규칙을 테스트로 고정
