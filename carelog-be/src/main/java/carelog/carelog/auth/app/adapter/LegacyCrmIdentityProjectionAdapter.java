@@ -36,8 +36,11 @@ public class LegacyCrmIdentityProjectionAdapter implements CRMIdentityProjection
 
     @Override
     public Optional<CRMIdentityClaims> findIdentityClaims(UUID accountId) {
-        return userRepository.findByAccountId(accountId)
-                .map(this::toClaims);
+        Optional<User> external = userRepository.findByExternalAccountId(accountId);
+        if (external.isPresent()) return external.map(this::toClaims);
+        // 삭제된 외부 연결을 과거 로컬 계정으로 잘못 해석하지 않는다.
+        if (userRepository.externalAccountExistsIncludingDeleted(accountId)) return Optional.empty();
+        return userRepository.findByAccountId(accountId).map(this::toClaims);
     }
 
     private CRMIdentityClaims toClaims(User user) {

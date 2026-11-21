@@ -16,6 +16,8 @@ public interface RelationRepository extends JpaRepository<Relation, Long> {
 
     List<Relation> findAllByManager(User manager);
 
+    List<Relation> findAllByOrganizationIdAndManager(UUID organizationId, User manager);
+
     List<Relation> findAllByCustomer(User customer);
 
     Optional<Relation> findByPublicId(UUID publicId);
