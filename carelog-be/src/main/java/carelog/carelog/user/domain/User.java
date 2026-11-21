@@ -66,6 +66,24 @@ public class User extends TenantBaseEntity {
     @Column(name = "account_id")
     private UUID accountId;
 
+    @Column(name = "external_account_id", unique = true, updatable = false)
+    private UUID externalAccountId;
+
+    // 외부 Identity의 인증 정보는 Carelog에 복제하지 않는다.
+    public static User externalManager(UUID externalAccountId,
+                                       String userId, String email, String name, UUID organizationId) {
+        User user = new User();
+        user.publicId = UUID.randomUUID();
+        user.externalAccountId = externalAccountId;
+        user.userId = userId;
+        user.email = email;
+        user.name = name;
+        user.role = UserRole.MANAGER;
+        user.managerType = ManagerType.PHYSICAL_THERAPIST;
+        user.assignOrganization(organizationId);
+        return user;
+    }
+
     @Builder
     public User(
             String userId, String email, String password, String name,

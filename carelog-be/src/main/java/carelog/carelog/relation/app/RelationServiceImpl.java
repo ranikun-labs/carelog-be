@@ -24,12 +24,24 @@ public class RelationServiceImpl implements RelationService {
                 .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
     }
 
+    private User resolveManager(UserPrincipal principal) {
+        UUID accountId = principal.getAccountId();
+        Optional<User> external = userRepository.findByExternalAccountId(accountId);
+        Optional<User> resolved = external.isPresent() ? external
+                : userRepository.externalAccountExistsIncludingDeleted(accountId)
+                    ? Optional.empty() : userRepository.findByAccountId(accountId);
+        return resolved.filter(user -> user.getRole() == UserRole.MANAGER
+                        && Objects.equals(user.getOrganizationId(), principal.getOrganizationId())
+                        && Objects.equals(user.getPublicId(), principal.getPublicId()))
+                .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
+    }
+
     @Override
     @Transactional
     public RelationResponse createRelation(UUID customerPublicId, UserPrincipal userDetails) {
-        User manager = userRepository.findByAccountId(userDetails.getAccountId())
-                .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
-        User customer = userRepository.findByPublicId(customerPublicId)
+        User manager = resolveManager(userDetails);
+        User customer = userRepository.findByOrganizationIdAndRoleAndPublicId(
+                        userDetails.getOrganizationId(), UserRole.CUSTOMER, customerPublicId)
                 .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
 
         if (manager.getRole() != UserRole.MANAGER || customer.getRole() != UserRole.CUSTOMER) {
@@ -80,10 +92,10 @@ public class RelationServiceImpl implements RelationService {
 
     @Override
     public List<RelationResponse> findAllRelationsByManager(UserPrincipal userDetails) {
-        User manager = userRepository.findByAccountId(userDetails.getAccountId())
-                .orElseThrow(() -> new CustomException(ExceptionStatus.USER_NOT_FOUND));
+        User manager = resolveManager(userDetails);
 
-        List<RelationResponse> responses = relationRepository.findAllByManager(manager).stream()
+        List<RelationResponse> responses = relationRepository.findAllByOrganizationIdAndManager(
+                        userDetails.getOrganizationId(), manager).stream()
                 .map(RelationResponse::from)
                 .toList();
         return responses;

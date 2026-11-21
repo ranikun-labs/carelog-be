@@ -24,6 +24,14 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByAccountId(UUID accountId);
 
+    Optional<User> findByExternalAccountId(UUID externalAccountId);
+
+    @Query(value = "SELECT EXISTS (SELECT 1 FROM users WHERE external_account_id = :externalId)", nativeQuery = true)
+    boolean externalAccountExistsIncludingDeleted(@Param("externalId") UUID externalId);
+
+    @Query(value = "SELECT EXISTS (SELECT 1 FROM users WHERE account_id = :accountId)", nativeQuery = true)
+    boolean localAccountExistsIncludingDeleted(@Param("accountId") UUID accountId);
+
     // --- Step B: Customer 조회 ---
     List<User> findAllByRole(UserRole role);
 
