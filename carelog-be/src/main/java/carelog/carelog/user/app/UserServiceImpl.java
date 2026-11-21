@@ -106,6 +106,9 @@ public class UserServiceImpl implements UserService {
         }
 
         if (request.password() != null && !request.password().isBlank()) {
+            if (user.getExternalAccountId() != null) {
+                throw new CustomException(ExceptionStatus.ACCESS_DENIED);
+            }
             if (user.getAccountId() != null) {
                 // Identity Principal(MANAGER): Credential 정본을 먼저 갱신하고, 같은 해시를
                 // Legacy Mirror(users.password)에 재사용한다(이중 인코딩 없음). 실패 시 이 Transaction
