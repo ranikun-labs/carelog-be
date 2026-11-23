@@ -50,7 +50,7 @@ class IdentityFoundationMigrationTest {
         var result = flyway.migrate();
 
         assertThat(result.success).isTrue();
-        assertThat(result.migrationsExecuted).isEqualTo(8);
+        assertThat(result.migrationsExecuted).isEqualTo(9);
 
         try (Connection conn = DriverManager.getConnection(jdbcUrl, POSTGRES.getUsername(), POSTGRES.getPassword())) {
             assertTableExists(conn, "users");
@@ -63,7 +63,9 @@ class IdentityFoundationMigrationTest {
             assertTableExists(conn, "external_identities");
             assertTableExists(conn, "product_clients");
             assertTableExists(conn, "customer_events");
+            assertTableExists(conn, "external_manager_projection_receipts");
             assertColumnExists(conn, "users", "account_id");
+            assertColumnExists(conn, "users", "external_account_id");
             assertColumnExists(conn, "users", "customer_memo");
             assertColumnIsNullable(conn, "users", "customer_memo");
             assertColumnExists(conn, "refresh_token", "account_id");
@@ -100,8 +102,8 @@ class IdentityFoundationMigrationTest {
         var result = flyway.migrate();
 
         assertThat(result.success).isTrue();
-        // baseline이 V1을 흡수하므로 실행되는 건 V2~V8 7개뿐이어야 한다.
-        assertThat(result.migrationsExecuted).isEqualTo(7);
+        // baseline이 V1을 흡수하므로 실행되는 건 V2~V9 8개뿐이어야 한다.
+        assertThat(result.migrationsExecuted).isEqualTo(8);
 
         try (Connection conn = DriverManager.getConnection(jdbcUrl, POSTGRES.getUsername(), POSTGRES.getPassword())) {
             // MANAGER Account 수 == Credential 수 == 1, CUSTOMER Account 수 == 0
