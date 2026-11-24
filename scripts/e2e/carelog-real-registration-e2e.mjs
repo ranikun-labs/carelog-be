@@ -92,6 +92,18 @@ async function readAccessLog() {
   return rows;
 }
 
+// carelog-be writes its access-log line after the response is sent, so re-read for up to ~3s until the
+// expected condition holds. Returns the last read either way; the caller's assertion decides.
+async function waitForAccessLog(predicate, windowMs = 3000) {
+  const deadline = Date.now() + windowMs;
+  let rows = await readAccessLog();
+  while (!predicate(rows) && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    rows = await readAccessLog();
+  }
+  return rows;
+}
+
 const countPuts = (rows, accountId) =>
   rows.filter((r) => r.method === 'PUT' && r.path === `${ENROLLMENT_PATH_PREFIX}${accountId}`);
 const countClaims200 = (rows, accountId) =>
@@ -156,7 +168,7 @@ async function main() {
 
   // 3. carelog-be access log: the enrollment PUT arrived once and was answered 201. Chunking is recorded only.
   stage = 'carelog-be access log after registration';
-  let rows = await readAccessLog();
+  let rows = await waitForAccessLog((r) => countPuts(r, accountId).length >= 1);
   const putsAfterRegistration = countPuts(rows, accountId);
   observed.enrollmentPutCount = putsAfterRegistration.length;
   observed.enrollmentPutStatuses = putsAfterRegistration.map((r) => r.status).join(',');
@@ -180,7 +192,7 @@ async function main() {
 
   // Login must have used the real carelog-be claims projection.
   stage = 'carelog-be claims read during login';
-  rows = await readAccessLog();
+  rows = await waitForAccessLog((r) => countClaims200(r, accountId).length >= 1);
   observed.claimsGet200 = countClaims200(rows, accountId).length;
   assert.ok(observed.claimsGet200 >= 1, 'carelog-be claims GET must answer 200 during login');
 
@@ -191,13 +203,14 @@ async function main() {
   });
   expectStatus(wrong, 401, 'Carelog wrong-password login through Gateway');
 
-  // 6. Replay with the same Idempotency-Key and body. Recorded as actual; the invariant is no duplicate row.
+  // 6. Replay with the same Idempotency-Key and body: must answer 201 and must not send another enrollment PUT.
   stage = 'Carelog registration replay through Gateway';
   const putsBeforeReplay = countPuts(await readAccessLog(), accountId).length;
   const replay = await send('POST', `${base}/api/v1/auth/carelog/registration`, {
     headers: { 'idempotency-key': idempotencyKey },
     body: carelog,
   });
+  expectStatus(replay, 201, 'Carelog registration replay through Gateway');
   observed.replayStatus = replay.status;
   observed.replayMessage = typeof replay.json?.message === 'string' && replay.json.message.length <= 120
     ? replay.json.message
@@ -206,7 +219,10 @@ async function main() {
     `SELECT count(*) FROM users WHERE external_account_id = '${accountId}'`);
   observed.carelogUserRowsAfterReplay = Number(usersAfterReplay[0][0]);
   assert.equal(observed.carelogUserRowsAfterReplay, 1, 'replay must not create a second carelog-be row');
+  // A late write from the replay could land after the response; wait the full window before counting.
+  await new Promise((resolve) => setTimeout(resolve, 3000));
   observed.enrollmentPutsDuringReplay = countPuts(await readAccessLog(), accountId).length - putsBeforeReplay;
+  assert.equal(observed.enrollmentPutsDuringReplay, 0, 'replay must not send another enrollment PUT');
   stage = 'replay complete';
 
   const summary = [

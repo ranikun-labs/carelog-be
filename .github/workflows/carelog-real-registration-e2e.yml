@@ -1,5 +1,9 @@
 name: Carelog real registration E2E
 
+# Evidence job, not a standing regression guard. It is pinned to this branch's three added files and
+# CARELOG_BASE_SHA. After merge or rebase, the candidate no longer adds exactly those files relative to the
+# base, so the diff check fails closed by design. Re-pin the SHAs and file set before reusing it.
+
 on:
   push:
     branches: [claude/great-heisenberg-u3i75y]
