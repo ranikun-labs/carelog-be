@@ -53,6 +53,13 @@ WORKDIR /app
 COPY --from=build --chown=10001:10001 /workspace/carelog-be/build/libs/carelog.jar /app/app.jar
 COPY --from=healthcheck --chown=0:0 /bin/busybox /usr/local/bin/busybox
 
+# AWS RDS CA for datasource sslmode=verify-full (sslrootcert=/run/rds-ca.pem).
+# docker-compose.prod.yml bind-mounts the same path, which overrides this baked copy.
+# Source: docker/rds-ca/ (see README there for rotation).
+COPY --chmod=0444 --chown=0:0 docker/rds-ca/ap-northeast-2-bundle.pem /run/rds-ca.pem
+# Ensures the configtree import path exists when no secret mount is attached.
+RUN install -d -m 0755 -o 0 -g 0 /run/secrets
+
 USER 10001:10001
 ENV JAVA_TOOL_OPTIONS="-XX:+UseContainerSupport -XX:InitialRAMPercentage=20.0 -XX:MaxRAMPercentage=70.0 -XX:+ExitOnOutOfMemoryError" \
     TZ=UTC

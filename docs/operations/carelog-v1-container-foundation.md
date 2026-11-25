@@ -27,7 +27,7 @@ Set `CARELOG_SECRET_DIR` to a directory readable by container UID/GID `10001`; i
 
 When Kakao OAuth is enabled, also provide the existing URI, timeout and `oauth.redirect-uris.kakao.WEB` / `oauth.redirect-uris.kakao.MOBILE` properties through the same config tree. The existing OAuth conditional still requires its current complete configuration. `carelog.internal.identity-claims.enabled` remains false; this deployment does not enable Identity cutover.
 
-Mount the current AWS RDS CA bundle at `CARELOG_RDS_CA_FILE`; the container exposes it as `/run/rds-ca.pem`. PgJDBC uses `sslmode=verify-full` and that CA file. Set `SPRING_DATASOURCE_URL` to the actual RDS hostname, database and port so hostname validation remains enabled. Do not put RDS credentials in the JDBC URL.
+Mount the current AWS RDS CA bundle at `CARELOG_RDS_CA_FILE`; the container exposes it as `/run/rds-ca.pem`. The image also bakes the vendored `docker/rds-ca/ap-northeast-2-bundle.pem` at that path, so the mount is an override for rotation, not a requirement (see `docker/rds-ca/README.md`). PgJDBC uses `sslmode=verify-full` and that CA file. Set `SPRING_DATASOURCE_URL` to the actual RDS hostname, database and port so hostname validation remains enabled. Do not put RDS credentials in the JDBC URL.
 
 Set `JWT_ACCESS_TOKEN_VALIDITY` and `JWT_REFRESH_TOKEN_VALIDITY` to the existing Carelog values in milliseconds. The sample values in `.env.example` are illustrative only; preserve the currently approved token lifetime policy.
 
