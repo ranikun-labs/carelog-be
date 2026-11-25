@@ -1,5 +1,7 @@
 package carelog.carelog.auth.web.internal;
 
+import carelog.carelog.auth.web.JwtAccessDeniedHandler;
+import carelog.carelog.common.config.InternalLoopbackOnlyFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -70,8 +72,16 @@ public class InternalIdentitySecurityConfiguration {
     SecurityFilterChain internalIdentitySecurityFilterChain(
             HttpSecurity http,
             InternalServiceAuthenticationFilter authenticationFilter,
-            InternalServiceForbiddenHandler forbiddenHandler
+            InternalServiceForbiddenHandler forbiddenHandler,
+            JwtAccessDeniedHandler accessDeniedHandler,
+            @Value("${carelog.internal.claims-loopback-only.enabled:false}") boolean claimsLoopbackOnly,
+            @Value("${server.forward-headers-strategy:none}") String forwardHeadersStrategy,
+            @Value("${server.tomcat.remoteip.remote-ip-header:}") String remoteIpHeader
     ) throws Exception {
+        if (claimsLoopbackOnly) {
+            InternalLoopbackOnlyFilter.requireNoForwardedAddressResolution(forwardHeadersStrategy, remoteIpHeader);
+        }
+        InternalLoopbackOnlyFilter loopbackFilter = new InternalLoopbackOnlyFilter(claimsLoopbackOnly, accessDeniedHandler);
         http
                 .securityMatcher("/internal/**")
                 .csrf(csrf -> csrf.disable())
@@ -84,6 +94,7 @@ public class InternalIdentitySecurityConfiguration {
                         .requestMatchers(HttpMethod.GET, "/internal/identity/claims/*")
                         .hasAuthority(InternalServiceCredentialVerifier.PROJECTION_READ_AUTHORITY)
                         .anyRequest().denyAll())
+                .addFilterBefore(loopbackFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(authenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

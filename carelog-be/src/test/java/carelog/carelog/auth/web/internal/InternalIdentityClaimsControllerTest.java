@@ -1,6 +1,8 @@
 package carelog.carelog.auth.web.internal;
 
 import carelog.carelog.auth.app.adapter.LegacyCrmIdentityProjectionAdapter;
+import carelog.carelog.auth.web.JwtAccessDeniedHandler;
+import carelog.carelog.common.config.ClockConfig;
 import carelog.carelog.common.web.exception.GlobalExceptionHandler;
 import carelog.carelog.user.domain.ManagerType;
 import carelog.carelog.user.domain.User;
@@ -49,7 +51,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         LegacyCrmIdentityProjectionAdapter.class,
         InternalIdentitySecurityConfiguration.class,
         InternalIdentityProjectionExceptionHandler.class,
-        GlobalExceptionHandler.class
+        GlobalExceptionHandler.class,
+        JwtAccessDeniedHandler.class,
+        ClockConfig.class
 })
 class InternalIdentityClaimsControllerTest {
 
@@ -84,6 +88,21 @@ class InternalIdentityClaimsControllerTest {
                 .andExpect(jsonPath("$.password").doesNotExist())
                 .andExpect(jsonPath("$.email").doesNotExist())
                 .andExpect(jsonPath("$.userId").doesNotExist());
+    }
+
+    @Test
+    void claimsLoopbackFlagOff_keepsVpcPeerOpenOnTheExistingContract() throws Exception {
+        // claims-loopback-only 기본값(false): 롤백 window 동안 구 Core가 8080 http로 claims를 호출할 수 있어야 한다.
+        when(userRepository.findByAccountId(ACCOUNT_ID)).thenReturn(Optional.empty());
+
+        mockMvc.perform(get("/internal/identity/claims/{accountId}", ACCOUNT_ID)
+                        .header("X-Service-Id", SERVICE_ID)
+                        .header("X-Service-Secret", SERVICE_SECRET)
+                        .with(request -> {
+                            request.setRemoteAddr("10.0.0.5");
+                            return request;
+                        }))
+                .andExpect(status().isNotFound());
     }
 
     @Test
