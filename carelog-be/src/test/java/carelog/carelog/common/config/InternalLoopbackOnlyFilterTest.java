@@ -1,26 +1,18 @@
 package carelog.carelog.common.config;
 
-import carelog.carelog.auth.web.JwtAccessDeniedHandler;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.env.MockEnvironment;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
-
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class InternalLoopbackOnlyFilterTest {
 
     private static final String PATH = "/internal/v1/identity/carelog/enrollments/a";
-
-    private final JwtAccessDeniedHandler deniedHandler = new JwtAccessDeniedHandler(
-            new ObjectMapper().findAndRegisterModules(),
-            Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC));
 
     @Test
     void enabled_passesIpv4Loopback() throws Exception {
@@ -34,32 +26,27 @@ class InternalLoopbackOnlyFilterTest {
     }
 
     @Test
-    void enabled_deniesVpcPeerWith403JsonShape() throws Exception {
+    void enabled_deniesVpcPeerWithEmptyBodyForbidden() throws Exception {
         MockHttpServletRequest request = request("10.0.0.5", null);
         MockHttpServletResponse response = new MockHttpServletResponse();
         MockFilterChain chain = new MockFilterChain();
 
-        filter(true).doFilter(request, response, chain);
+        new InternalLoopbackOnlyFilter(true).doFilter(request, response, chain);
 
         assertThat(chain.getRequest()).isNull();
         assertThat(response.getStatus()).isEqualTo(403);
-        assertThat(response.getContentType()).startsWith("application/json");
-        assertThat(response.getContentAsString())
-                .contains("\"status\":403")
-                .contains("\"error\":\"Forbidden\"")
-                .contains("\"path\":\"" + PATH + "\"");
+        assertThat(response.getContentAsByteArray()).isEmpty();
     }
 
     @Test
-    void enabled_ignoresForwardedForSpoof() throws Exception {
+    void enabled_ignoresForwardedHeadersSpoof() throws Exception {
         // 소켓 피어가 VPC면 XFF/X-Real-IP에 loopback을 넣어도 거부된다.
-        MockHttpServletRequest request = request("10.0.0.5", null);
-        request.addHeader("X-Forwarded-For", "127.0.0.1");
+        MockHttpServletRequest request = request("10.0.0.5", "127.0.0.1");
         request.addHeader("X-Real-IP", "::1");
         MockHttpServletResponse response = new MockHttpServletResponse();
         MockFilterChain chain = new MockFilterChain();
 
-        filter(true).doFilter(request, response, chain);
+        new InternalLoopbackOnlyFilter(true).doFilter(request, response, chain);
 
         assertThat(chain.getRequest()).isNull();
         assertThat(response.getStatus()).isEqualTo(403);
@@ -72,39 +59,56 @@ class InternalLoopbackOnlyFilterTest {
 
     @Test
     void nullRemoteAddr_isDenied() throws Exception {
-        MockHttpServletRequest request = request(null, null);
         MockHttpServletResponse response = new MockHttpServletResponse();
-        filter(true).doFilter(request, response, new MockFilterChain());
+        new InternalLoopbackOnlyFilter(true).doFilter(request(null, null), response, new MockFilterChain());
         assertThat(response.getStatus()).isEqualTo(403);
     }
 
     @Test
-    void forwardedAddressResolution_failsStartupWhenEnabled() {
-        assertThatThrownBy(() -> InternalLoopbackOnlyFilter.requireNoForwardedAddressResolution("framework", ""))
-                .isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> InternalLoopbackOnlyFilter.requireNoForwardedAddressResolution("native", ""))
-                .isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> InternalLoopbackOnlyFilter.requireNoForwardedAddressResolution("none", "X-Forwarded-For"))
-                .isInstanceOf(IllegalStateException.class);
+    void guard_allowsExplicitNone() {
+        assertThatCode(() -> InternalLoopbackOnlyFilter.requireNoForwardedAddressResolution(
+                new MockEnvironment().withProperty("server.forward-headers-strategy", "none")))
+                .doesNotThrowAnyException();
     }
 
     @Test
-    void forwardedAddressResolution_allowsDefaults() {
-        InternalLoopbackOnlyFilter.requireNoForwardedAddressResolution("none", "");
-        InternalLoopbackOnlyFilter.requireNoForwardedAddressResolution("", null);
+    void guard_allowsWhenNothingIsSetAndNoCloudPlatform() {
+        assertThatCode(() -> InternalLoopbackOnlyFilter.requireNoForwardedAddressResolution(new MockEnvironment()))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void guard_rejectsFrameworkAndNativeStrategies() {
+        assertRejected(new MockEnvironment().withProperty("server.forward-headers-strategy", "framework"));
+        assertRejected(new MockEnvironment().withProperty("server.forward-headers-strategy", "native"));
+    }
+
+    @Test
+    void guard_rejectsRemoteIpValveProperties() {
+        assertRejected(new MockEnvironment().withProperty("server.tomcat.remoteip.remote-ip-header", "X-Forwarded-For"));
+        assertRejected(new MockEnvironment().withProperty("server.tomcat.remoteip.protocol-header", "X-Forwarded-Proto"));
+        assertRejected(new MockEnvironment().withProperty("server.tomcat.remoteip.internal-proxies", "10\\.0\\.0\\.\\d+"));
+    }
+
+    @Test
+    void guard_rejectsCloudPlatformThatTrustsForwardHeadersWhenStrategyUnset() {
+        // strategy 미설정 시 Spring Boot가 클라우드 플랫폼 기본값으로 헤더 신뢰를 켤 수 있다(CLOUD_FOUNDRY는 신뢰).
+        assertRejected(new MockEnvironment().withProperty("spring.main.cloud-platform", "CLOUD_FOUNDRY"));
+    }
+
+    private static void assertRejected(MockEnvironment env) {
+        assertThatThrownBy(() -> InternalLoopbackOnlyFilter.requireNoForwardedAddressResolution(env))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("스푸핑 방지");
     }
 
     private void assertPassesThrough(boolean enabled, String remoteAddr, String xff) throws Exception {
         MockHttpServletRequest request = request(remoteAddr, xff);
         MockHttpServletResponse response = new MockHttpServletResponse();
         MockFilterChain chain = new MockFilterChain();
-        filter(enabled).doFilter(request, response, chain);
+        new InternalLoopbackOnlyFilter(enabled).doFilter(request, response, chain);
         assertThat(chain.getRequest()).isSameAs(request);
         assertThat(response.getStatus()).isEqualTo(200);
-    }
-
-    private InternalLoopbackOnlyFilter filter(boolean enabled) {
-        return new InternalLoopbackOnlyFilter(enabled, deniedHandler);
     }
 
     private static MockHttpServletRequest request(String remoteAddr, String xff) {

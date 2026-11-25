@@ -45,10 +45,6 @@ class InternalIdentityClaimsLifecycleContextTest {
                     DispatcherServletAutoConfiguration.class,
                     WebMvcAutoConfiguration.class))
             .withUserConfiguration(LoggingAspectTestConfig.class, InternalIdentitySecurityConfiguration.class)
-            .withBean(carelog.carelog.auth.web.JwtAccessDeniedHandler.class,
-                    () -> new carelog.carelog.auth.web.JwtAccessDeniedHandler(
-                            new com.fasterxml.jackson.databind.ObjectMapper(),
-                            java.time.Clock.systemUTC()))
             .withPropertyValues("gateway.internal-secret=" + GATEWAY_SECRET);
 
     @Test

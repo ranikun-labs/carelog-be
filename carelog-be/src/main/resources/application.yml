@@ -27,6 +27,9 @@ spring:
 server:
   servlet:
     context-path: /api/v1
+  # 내부 loopback 경계(carelog.internal.*loopback-only)의 전제: 원격 주소를 헤더로 복원하지 않는다.
+  # 미설정 시 클라우드 플랫폼 감지로 헤더 신뢰가 켜질 수 있어 명시적으로 none을 둔다.
+  forward-headers-strategy: none
 
 jwt:
   secret-key: ${JWT_SECRET_KEY}

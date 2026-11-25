@@ -4,7 +4,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import carelog.carelog.auth.web.JwtAccessDeniedHandler;
+import org.springframework.core.env.Environment;
 import carelog.carelog.common.config.InternalLoopbackOnlyFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -42,14 +42,12 @@ public class EnrollmentSecurityConfiguration {
             @Value("${carelog.internal.identity-claims.service-secret:}") String readSecret,
             @Value("${gateway.internal-secret:}") String gatewaySecret,
             @Value("${carelog.internal.loopback-only.enabled:false}") boolean loopbackOnly,
-            @Value("${server.forward-headers-strategy:none}") String forwardHeadersStrategy,
-            @Value("${server.tomcat.remoteip.remote-ip-header:}") String remoteIpHeader,
-            JwtAccessDeniedHandler accessDeniedHandler) throws Exception {
+            Environment environment) throws Exception {
         validateSecrets(writeSecret, readSecret, gatewaySecret);
         if (loopbackOnly) {
-            InternalLoopbackOnlyFilter.requireNoForwardedAddressResolution(forwardHeadersStrategy, remoteIpHeader);
+            InternalLoopbackOnlyFilter.requireNoForwardedAddressResolution(environment);
         }
-        InternalLoopbackOnlyFilter loopbackFilter = new InternalLoopbackOnlyFilter(loopbackOnly, accessDeniedHandler);
+        InternalLoopbackOnlyFilter loopbackFilter = new InternalLoopbackOnlyFilter(loopbackOnly);
         byte[] expected = digest(writeSecret);
         OncePerRequestFilter filter = new OncePerRequestFilter() {
             @Override

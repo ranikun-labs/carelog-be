@@ -1,8 +1,6 @@
 package carelog.carelog.auth.web.internal;
 
 import carelog.carelog.auth.app.adapter.LegacyCrmIdentityProjectionAdapter;
-import carelog.carelog.auth.web.JwtAccessDeniedHandler;
-import carelog.carelog.common.config.ClockConfig;
 import carelog.carelog.common.web.exception.GlobalExceptionHandler;
 import carelog.carelog.user.domain.ManagerType;
 import carelog.carelog.user.domain.User;
@@ -51,9 +49,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         LegacyCrmIdentityProjectionAdapter.class,
         InternalIdentitySecurityConfiguration.class,
         InternalIdentityProjectionExceptionHandler.class,
-        GlobalExceptionHandler.class,
-        JwtAccessDeniedHandler.class,
-        ClockConfig.class
+        GlobalExceptionHandler.class
 })
 class InternalIdentityClaimsControllerTest {
 

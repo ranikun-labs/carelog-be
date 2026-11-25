@@ -1,6 +1,6 @@
 package carelog.carelog.auth.web.internal;
 
-import carelog.carelog.auth.web.JwtAccessDeniedHandler;
+import org.springframework.core.env.Environment;
 import carelog.carelog.common.config.InternalLoopbackOnlyFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -73,15 +73,13 @@ public class InternalIdentitySecurityConfiguration {
             HttpSecurity http,
             InternalServiceAuthenticationFilter authenticationFilter,
             InternalServiceForbiddenHandler forbiddenHandler,
-            JwtAccessDeniedHandler accessDeniedHandler,
             @Value("${carelog.internal.claims-loopback-only.enabled:false}") boolean claimsLoopbackOnly,
-            @Value("${server.forward-headers-strategy:none}") String forwardHeadersStrategy,
-            @Value("${server.tomcat.remoteip.remote-ip-header:}") String remoteIpHeader
+            Environment environment
     ) throws Exception {
         if (claimsLoopbackOnly) {
-            InternalLoopbackOnlyFilter.requireNoForwardedAddressResolution(forwardHeadersStrategy, remoteIpHeader);
+            InternalLoopbackOnlyFilter.requireNoForwardedAddressResolution(environment);
         }
-        InternalLoopbackOnlyFilter loopbackFilter = new InternalLoopbackOnlyFilter(claimsLoopbackOnly, accessDeniedHandler);
+        InternalLoopbackOnlyFilter loopbackFilter = new InternalLoopbackOnlyFilter(claimsLoopbackOnly);
         http
                 .securityMatcher("/internal/**")
                 .csrf(csrf -> csrf.disable())

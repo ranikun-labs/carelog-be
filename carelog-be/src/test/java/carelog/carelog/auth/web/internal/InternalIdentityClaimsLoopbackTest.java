@@ -1,8 +1,6 @@
 package carelog.carelog.auth.web.internal;
 
 import carelog.carelog.auth.app.adapter.LegacyCrmIdentityProjectionAdapter;
-import carelog.carelog.common.config.ClockConfig;
-import carelog.carelog.auth.web.JwtAccessDeniedHandler;
 import carelog.carelog.common.web.exception.GlobalExceptionHandler;
 import carelog.carelog.user.domain.UserRepository;
 import org.junit.jupiter.api.Test;
@@ -22,7 +20,6 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -43,9 +40,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         LegacyCrmIdentityProjectionAdapter.class,
         InternalIdentitySecurityConfiguration.class,
         InternalIdentityProjectionExceptionHandler.class,
-        GlobalExceptionHandler.class,
-        JwtAccessDeniedHandler.class,
-        ClockConfig.class
+        GlobalExceptionHandler.class
 })
 class InternalIdentityClaimsLoopbackTest {
 
@@ -63,8 +58,7 @@ class InternalIdentityClaimsLoopbackTest {
     void claimsLoopbackOnly_deniesVpcPeerEvenWithValidCredential() throws Exception {
         mockMvc.perform(serviceGet(ACCOUNT_ID).with(remote("10.0.0.5")))
                 .andExpect(status().isForbidden())
-                .andExpect(content().contentTypeCompatibleWith("application/json"))
-                .andExpect(jsonPath("$.status").value(403));
+                .andExpect(content().string(""));
 
         verifyNoInteractions(userRepository);
     }
