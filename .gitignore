@@ -44,6 +44,7 @@ out/
 !.env.example
 **/secrets/
 *.pem
+!docker/rds-ca/*.pem
 *.key
 *.p12
 *.pfx

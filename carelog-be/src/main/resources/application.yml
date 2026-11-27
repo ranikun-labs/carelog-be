@@ -27,6 +27,9 @@ spring:
 server:
   servlet:
     context-path: /api/v1
+  # 내부 loopback 경계(carelog.internal.*loopback-only)의 전제: 원격 주소를 헤더로 복원하지 않는다.
+  # 미설정 시 클라우드 플랫폼 감지로 헤더 신뢰가 켜질 수 있어 명시적으로 none을 둔다.
+  forward-headers-strategy: none
 
 jwt:
   secret-key: ${JWT_SECRET_KEY}
@@ -38,6 +41,12 @@ carelog:
     identity-claims:
       enabled: ${CARELOG_INTERNAL_IDENTITY_CLAIMS_ENABLED:false}
       service-secret: ${CARELOG_INTERNAL_IDENTITY_CLAIMS_SERVICE_SECRET:}
+    # 내부 엔드포인트를 loopback 피어(8443 TLS sidecar)로만 허용한다. 기본 false.
+    loopback-only:
+      enabled: ${CARELOG_INTERNAL_LOOPBACK_ONLY_ENABLED:false}
+    # claims만 별도 제어한다. 롤백 window 동안 구 Core(8080 http)가 claims를 호출하도록 false로 둘 수 있다.
+    claims-loopback-only:
+      enabled: ${CARELOG_INTERNAL_CLAIMS_LOOPBACK_ONLY_ENABLED:false}
 
 oauth:
   state:

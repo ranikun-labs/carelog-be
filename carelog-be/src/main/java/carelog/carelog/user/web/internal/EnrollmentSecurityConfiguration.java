@@ -4,6 +4,8 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.core.env.Environment;
+import carelog.carelog.common.config.InternalLoopbackOnlyFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -38,8 +40,14 @@ public class EnrollmentSecurityConfiguration {
     SecurityFilterChain enrollmentSecurityFilterChain(HttpSecurity http,
             @Value("${carelog.identity.enrollment.service-secret:}") String writeSecret,
             @Value("${carelog.internal.identity-claims.service-secret:}") String readSecret,
-            @Value("${gateway.internal-secret:}") String gatewaySecret) throws Exception {
+            @Value("${gateway.internal-secret:}") String gatewaySecret,
+            @Value("${carelog.internal.loopback-only.enabled:false}") boolean loopbackOnly,
+            Environment environment) throws Exception {
         validateSecrets(writeSecret, readSecret, gatewaySecret);
+        if (loopbackOnly) {
+            InternalLoopbackOnlyFilter.requireNoForwardedAddressResolution(environment);
+        }
+        InternalLoopbackOnlyFilter loopbackFilter = new InternalLoopbackOnlyFilter(loopbackOnly);
         byte[] expected = digest(writeSecret);
         OncePerRequestFilter filter = new OncePerRequestFilter() {
             @Override
@@ -68,6 +76,7 @@ public class EnrollmentSecurityConfiguration {
                         .accessDeniedHandler((req, res, e) -> res.setStatus(403)))
                 .authorizeHttpRequests(auth -> auth.requestMatchers(HttpMethod.PUT, "/internal/v1/identity/carelog/enrollments/*")
                         .hasAuthority(AUTHORITY).anyRequest().denyAll())
+                .addFilterBefore(loopbackFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(filter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

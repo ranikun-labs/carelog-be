@@ -87,6 +87,21 @@ class InternalIdentityClaimsControllerTest {
     }
 
     @Test
+    void claimsLoopbackFlagOff_keepsVpcPeerOpenOnTheExistingContract() throws Exception {
+        // claims-loopback-only 기본값(false): 롤백 window 동안 구 Core가 8080 http로 claims를 호출할 수 있어야 한다.
+        when(userRepository.findByAccountId(ACCOUNT_ID)).thenReturn(Optional.empty());
+
+        mockMvc.perform(get("/internal/identity/claims/{accountId}", ACCOUNT_ID)
+                        .header("X-Service-Id", SERVICE_ID)
+                        .header("X-Service-Secret", SERVICE_SECRET)
+                        .with(request -> {
+                            request.setRemoteAddr("10.0.0.5");
+                            return request;
+                        }))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     void absentAccount_isNotFound() throws Exception {
         when(userRepository.findByAccountId(ACCOUNT_ID)).thenReturn(Optional.empty());
 
