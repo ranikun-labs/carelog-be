@@ -1,0 +1,158 @@
+name: Carelog real registration E2E
+
+# Evidence job, not a standing regression guard. It is pinned to this branch's three added files and
+# CARELOG_BASE_SHA. After merge or rebase, the candidate no longer adds exactly those files relative to the
+# base, so the diff check fails closed by design. Re-pin the SHAs and file set before reusing it.
+
+on:
+  push:
+    branches: [claude/great-heisenberg-u3i75y]
+    paths:
+      - .github/workflows/carelog-real-registration-e2e.yml
+      - scripts/e2e/run-carelog-real-registration-e2e.sh
+      - scripts/e2e/carelog-real-registration-e2e.mjs
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Pins. CARELOG_BASE_SHA must be an ancestor of the candidate, and the cumulative diff from it to the candidate
+# must be exactly the three owned files, all added (fail-closed). PLATFORM_SERVICES_* are verified by tree.
+# CARELOG_ENROLLMENT_TARGET=real: enrollment PUT and claims GET are answered by the real carelog-be (no stub).
+env:
+  CARELOG_BASE_SHA: 5d6aa88cdf44d01ca07a8fa8265a8c7cb0c2a995
+  PLATFORM_SERVICES_SHA: f9adfd3d338f482e7c2967512522e5b4e2354619
+  PLATFORM_SERVICES_TREE: dbbd2b215e9a2de4e43067d1ad699db6665bbde6
+  CARELOG_ENROLLMENT_TARGET: real
+
+concurrency:
+  group: carelog-real-registration-e2e-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  real-registration-e2e:
+    if: github.repository == 'ranikun-labs/carelog-be'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:18.4-alpine3.24
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: postgres
+        ports:
+          - 127.0.0.1:5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+      valkey:
+        image: valkey/valkey:9.1.2-alpine@sha256:48332870af354a799964c0012ae1194a0bf2bf894eb508f945810596dc2d8d11
+        ports:
+          - 127.0.0.1:6379:6379
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    steps:
+      - name: Check out candidate with parent history
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          # Full history so CARELOG_BASE_SHA (an ancestor, not necessarily HEAD^) is present for the pin check.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Record Carelog enrollment target
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Runs first so the disclosure is recorded even when a later pin check fails closed.
+          test "$CARELOG_ENROLLMENT_TARGET" = "real"
+          {
+            echo '## Carelog enrollment'
+            echo '- Target: `CARELOG_ENROLLMENT_TARGET=real`. Enrollment PUT and product-claims GET are served by the real carelog-be.'
+            echo '- Verified here: Core registration reaches carelog-be, carelog-be holds the enrollment row, login returns a token whose sub is the accountId, wrong password is 401.'
+            echo '- Chunked PUT: asserted from the carelog-be access log (Transfer-Encoding: chunked, status 201 for the accountId).'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify carelog-be candidate pin
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Fail-closed. No history rewrite: the base only has to be an ancestor of the candidate.
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA" || {
+            echo "FAIL-CLOSED: checked-out HEAD does not equal GITHUB_SHA."; exit 1; }
+          [[ "$CARELOG_BASE_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "FAIL-CLOSED: CARELOG_BASE_SHA is not a 40-hex commit SHA."; exit 1; }
+          git merge-base --is-ancestor "$CARELOG_BASE_SHA" HEAD || {
+            echo "FAIL-CLOSED: CARELOG_BASE_SHA ($CARELOG_BASE_SHA) is not an ancestor of the candidate."; exit 1; }
+          # Cumulative diff from the base: only additions, and exactly the three owned files.
+          test -z "$(git diff --name-status "$CARELOG_BASE_SHA" HEAD | awk '$1 != "A"')" || {
+            echo "FAIL-CLOSED: candidate modifies, renames or deletes files relative to the base."; exit 1; }
+          expected="$(printf '%s\n' \
+            .github/workflows/carelog-real-registration-e2e.yml \
+            scripts/e2e/carelog-real-registration-e2e.mjs \
+            scripts/e2e/run-carelog-real-registration-e2e.sh | sort)"
+          actual="$(git diff --name-only --no-renames "$CARELOG_BASE_SHA" HEAD | sort)"
+          test "$actual" = "$expected" || {
+            echo "FAIL-CLOSED: candidate file set differs from the three owned E2E files."; exit 1; }
+          {
+            echo "carelog_candidate_sha=$GITHUB_SHA"
+            echo "carelog_candidate_tree=$(git rev-parse 'HEAD^{tree}')"
+            echo "carelog_base_sha=$CARELOG_BASE_SHA"
+          } >> "$GITHUB_ENV"
+
+      - name: Download and verify pinned platform-services source
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$PLATFORM_SERVICES_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "FAIL-CLOSED: PLATFORM_SERVICES_SHA is not 40-hex."; exit 1; }
+          [[ "$PLATFORM_SERVICES_TREE" =~ ^[0-9a-f]{40}$ ]] || { echo "FAIL-CLOSED: PLATFORM_SERVICES_TREE is not 40-hex."; exit 1; }
+          archive="$RUNNER_TEMP/platform-services.zip"
+          unpack="$RUNNER_TEMP/platform-services"
+          curl --fail --silent --show-error --location \
+            "https://codeload.github.com/ranikun-labs/platform-services/zip/$PLATFORM_SERVICES_SHA" \
+            -o "$archive"
+          mkdir -p "$unpack"
+          unzip -q "$archive" -d "$unpack"
+          platform_dir="$(find "$unpack" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          test -n "$platform_dir"
+          chmod +x "$platform_dir/gradlew"
+          # Compute the tree in a separate git dir so the platform checkout stays free of .git.
+          git init -q --bare "$RUNNER_TEMP/platform-tree.git"
+          git --git-dir="$RUNNER_TEMP/platform-tree.git" --work-tree="$platform_dir" add -f -A
+          platform_tree="$(git --git-dir="$RUNNER_TEMP/platform-tree.git" write-tree)"
+          test "$platform_tree" = "$PLATFORM_SERVICES_TREE" || {
+            echo "FAIL-CLOSED: platform-services tree does not match the pin."; exit 1; }
+          echo "PLATFORM_SOURCE_DIR=$platform_dir" >> "$GITHUB_ENV"
+
+      - name: Record pinned sources in job summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '### Pinned sources'
+            echo "- carelog-be candidate: \`$carelog_candidate_sha\` (tree \`$carelog_candidate_tree\`)"
+            echo "- carelog-be base (ancestor): \`$carelog_base_sha\`"
+            echo "- platform-services: \`$PLATFORM_SERVICES_SHA\` (tree \`$PLATFORM_SERVICES_TREE\`)"
+            echo '- Finance: disabled in this composition (Carelog-only Core profile `dev`).'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # setup-java exports JAVA_HOME_17_X64 (carelog-be, Gateway) and JAVA_HOME_21_X64 (platform-core build/run).
+      - name: Set up JDK 17 (carelog-be, Gateway) and JDK 21 (platform-core)
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: |
+            17
+            21
+
+      - name: Run Carelog real registration E2E
+        shell: bash
+        run: >-
+          bash ./scripts/e2e/run-carelog-real-registration-e2e.sh
+          "$GITHUB_WORKSPACE"
+          "$PLATFORM_SOURCE_DIR"
