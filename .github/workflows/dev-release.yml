@@ -1,6 +1,8 @@
 name: Carelog DEV release
 
 on:
+  push:
+    branches: [dev]
   workflow_dispatch:
     inputs:
       deploy_enabled:
@@ -13,7 +15,10 @@ permissions: {}
 
 jobs:
   test:
-    if: github.repository == 'ranikun-labs/carelog-be' && github.ref == 'refs/heads/dev'
+    if: >-
+      github.repository == 'ranikun-labs/carelog-be' && github.ref == 'refs/heads/dev' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'push' && vars.CARELOG_DEV_AUTO_DEPLOY == 'true'))
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
@@ -46,5 +51,5 @@ jobs:
       service: carelog
       dockerfile: carelog-be/Dockerfile
       context: .
-      deploy_enabled: ${{ inputs.deploy_enabled }}
+      deploy_enabled: ${{ github.event_name == 'push' || inputs.deploy_enabled == true }}
       test_sha: ${{ github.sha }}
