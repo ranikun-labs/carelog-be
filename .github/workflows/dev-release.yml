@@ -1,6 +1,8 @@
 name: Carelog DEV release
 
 on:
+  push:
+    branches: [dev]
   workflow_dispatch:
     inputs:
       deploy_enabled:
@@ -12,8 +14,30 @@ on:
 permissions: {}
 
 jobs:
-  test:
+  activation:
     if: github.repository == 'ranikun-labs/carelog-be' && github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      enabled: ${{ steps.check.outputs.enabled }}
+    steps:
+      - name: Check automatic release activation
+        id: check
+        env:
+          AUTO_DEPLOY: ${{ vars.CARELOG_DEV_AUTO_DEPLOY }}
+        run: |
+          if [[ "$AUTO_DEPLOY" == 'true' ]]; then
+            echo 'enabled=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'enabled=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  test:
+    needs: activation
+    if: >-
+      github.repository == 'ranikun-labs/carelog-be' && github.ref == 'refs/heads/dev' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'push' && needs.activation.outputs.enabled == 'true'))
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
@@ -41,10 +65,11 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    uses: ranikun-labs/platform-infra/.github/workflows/dev-ecs-release.yml@fdeb22805d9f26779073dc68c6f0a9a166ccb884
+    uses: ranikun-labs/platform-infra/.github/workflows/dev-ecs-release.yml@256163926b5fcbf188c48fbcac98417196033061
     with:
       service: carelog
       dockerfile: carelog-be/Dockerfile
       context: .
-      deploy_enabled: ${{ inputs.deploy_enabled }}
+      deploy_enabled: ${{ github.event_name == 'push' || inputs.deploy_enabled == true }}
       test_sha: ${{ github.sha }}
+      require_current_dev_tip: ${{ github.event_name == 'push' }}
