@@ -14,11 +14,30 @@ on:
 permissions: {}
 
 jobs:
+  activation:
+    if: github.repository == 'ranikun-labs/carelog-be' && github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      enabled: ${{ steps.check.outputs.enabled }}
+    steps:
+      - name: Check automatic release activation
+        id: check
+        env:
+          AUTO_DEPLOY: ${{ vars.CARELOG_DEV_AUTO_DEPLOY }}
+        run: |
+          if [[ "$AUTO_DEPLOY" == 'true' ]]; then
+            echo 'enabled=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'enabled=false' >> "$GITHUB_OUTPUT"
+          fi
+
   test:
+    needs: activation
     if: >-
       github.repository == 'ranikun-labs/carelog-be' && github.ref == 'refs/heads/dev' &&
       (github.event_name == 'workflow_dispatch' ||
-       (github.event_name == 'push' && vars.CARELOG_DEV_AUTO_DEPLOY == 'true'))
+       (github.event_name == 'push' && needs.activation.outputs.enabled == 'true'))
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
